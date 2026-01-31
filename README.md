@@ -102,14 +102,13 @@ EXPO_PUBLIC_API_BASE_URL=http://45.112.125.75:8080/public/api
 - Shopping cart dengan quantity editor
 - PDF invoice download
 
-## 🚦 Current Status
+## �️ Logo & Splash Screen
 
-- ✅ Auth system (mock ready)
-- ✅ Product browsing
-- ✅ Shopping cart
-- ✅ PDF generation
-- ✅ Theme system
-- ⏳ Real API login (pending)
+- ✅ App icon (logo)
+- ✅ Splash screen (light & dark mode)
+- 📖 Panduan: Lihat [ASSET_SETUP.md](./ASSET_SETUP.md)
+
+> **Quick Start:** Buka `assets/ASSET_GENERATOR.html` di browser untuk download template design
 
 ## 👨‍💻 Development
 

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order App - Asset Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+            font-size: 28px;
+        }
+        
+        .assets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+        
+        .asset-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .asset-preview {
+            width: 100%;
+            height: 200px;
+            margin: 20px 0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+        }
+        
+        .logo-preview {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: white;
+        }
+        
+        .splash-light {
+            background: white;
+            border: 2px dashed #ccc;
+        }
+        
+        .splash-dark {
+            background: #1a1a1a;
+            border: 2px dashed #666;
+        }
+        
+        .asset-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .asset-card p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .size-info {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 15px;
+            font-family: monospace;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .instructions {
+            background: #f0f7ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 40px;
+            color: #333;
+        }
+        
+        .instructions h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+        }
+        
+        .instructions code {
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Order App - Asset Generator</h1>
+        
+        <div class="assets">
+            <!-- Logo Icon -->
+            <div class="asset-card">
+                <div class="asset-preview logo-preview">🛒</div>
+                <h3>App Icon</h3>
+                <p>Logo aplikasi utama</p>
+                <div class="size-info">1024 × 1024 px<br>PNG</div>
+                <button class="download-btn" onclick="downloadIcon()">💾 Download Template</button>
+            </div>
+            
+            <!-- Splash Screen Light -->
+            <div class="asset-card">
+                <div class="asset-preview splash-light">🛒</div>
+                <h3>Splash Screen (Light)</h3>
+                <p>Untuk light mode</p>
+                <div class="size-info">1200 × 1200 px<br>PNG (White BG)</div>
+                <button class="download-btn" onclick="downloadSplashLight()">💾 Download Template</button>
+            </div>
+            
+            <!-- Splash Screen Dark -->
+            <div class="asset-card">
+                <div class="asset-preview splash-dark" style="color: #FFD700;">🛒</div>
+                <h3>Splash Screen (Dark)</h3>
+                <p>Untuk dark mode</p>
+                <div class="size-info">1200 × 1200 px<br>PNG (Dark BG)</div>
+                <button class="download-btn" onclick="downloadSplashDark()">💾 Download Template</button>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h2>📋 Instruksi Setup</h2>
+            <ol>
+                <li>
+                    <strong>Design Assets:</strong> Gunakan Canva, Figma, atau tool design lainnya
+                    <ul style="margin-top: 8px; margin-left: 20px;">
+                        <li>Logo: Gunakan emoji 🛒 atau custom design dengan warna #FFD700</li>
+                        <li>Splash Screen: Display logo di tengah dengan text "Order App"</li>
+                    </ul>
+                </li>
+                <li>
+                    <strong>Export sebagai PNG:</strong> Pastikan background transparan untuk icon, solid color untuk splash
+                </li>
+                <li>
+                    <strong>Simpan ke folder:</strong> Copy ke <code>assets/images/</code>
+                    <ul style="margin-top: 8px; margin-left: 20px;">
+                        <li><code>icon.png</code> - Logo aplikasi</li>
+                        <li><code>splash-screen.png</code> - Splash light</li>
+                        <li><code>splash-screen-dark.png</code> - Splash dark</li>
+                        <li><code>android-icon-*.png</code> - Android icons</li>
+                    </ul>
+                </li>
+                <li>
+                    <strong>Generate splash:</strong> Jalankan <code>npx expo-splash-screen-generate</code>
+                </li>
+                <li>
+                    <strong>Test:</strong> Run <code>npm start</code> atau <code>npm run web</code>
+                </li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        function downloadIcon() {
+            const svg = `
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#grad1)"/>
+  
+  <!-- Shopping Cart -->
+  <g transform="translate(250, 250)">
+    <path d="M 100 100 L 300 100 L 350 400 Q 350 450 300 450 L 100 450 Q 50 450 50 400 L 0 100 Z" 
+          fill="white" opacity="0.9" stroke="white" stroke-width="20" stroke-linejoin="round"/>
+    
+    <!-- Cart wheels -->
+    <circle cx="120" cy="480" r="40" fill="white"/>
+    <circle cx="280" cy="480" r="40" fill="white"/>
+  </g>
+</svg>
+            `;
+            downloadSVG(svg, 'icon.png');
+        }
+        
+        function downloadSplashLight() {
+            const svg = `
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="1200" fill="white"/>
+  
+  <!-- Logo -->
+  <g transform="translate(400, 300)">
+    <defs>
+      <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+      </linearGradient>
+    </defs>
+    
+    <circle cx="200" cy="200" r="200" fill="url(#grad2)"/>
+    <text x="200" y="280" text-anchor="middle" font-size="200" fill="white">🛒</text>
+  </g>
+  
+  <!-- App Name -->
+  <text x="600" y="850" text-anchor="middle" font-size="80" font-weight="bold" fill="#333">Order App</text>
+  <text x="600" y="950" text-anchor="middle" font-size="40" fill="#999">Aplikasi Pesanan Online</text>
+</svg>
+            `;
+            downloadSVG(svg, 'splash-screen.png');
+        }
+        
+        function downloadSplashDark() {
+            const svg = `
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="1200" fill="#1a1a1a"/>
+  
+  <!-- Logo -->
+  <g transform="translate(400, 300)">
+    <defs>
+      <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+      </linearGradient>
+    </defs>
+    
+    <circle cx="200" cy="200" r="200" fill="url(#grad3)"/>
+    <text x="200" y="280" text-anchor="middle" font-size="200" fill="white">🛒</text>
+  </g>
+  
+  <!-- App Name -->
+  <text x="600" y="850" text-anchor="middle" font-size="80" font-weight="bold" fill="white">Order App</text>
+  <text x="600" y="950" text-anchor="middle" font-size="40" fill="#999">Aplikasi Pesanan Online</text>
+</svg>
+            `;
+            downloadSVG(svg, 'splash-screen-dark.png');
+        }
+        
+        function downloadSVG(svg, filename) {
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
