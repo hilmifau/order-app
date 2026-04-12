@@ -10,6 +10,7 @@ import { useDispatch, useSelector } from 'react-redux';
 interface ProfileData {
   name: string;
   storeName: string;
+  kd_cus: string;
   address: string;
   phone: string;
   email: string;
@@ -19,6 +20,7 @@ interface ProfileData {
 const DEFAULT_PROFILE: ProfileData = {
   name: 'John Doe',
   storeName: 'Toko Sentosa',
+  kd_cus: '- ',
   address: 'Jl. Gatot Subroto No. 123, Jakarta Selatan',
   phone: '081234567890',
   email: 'john@tokosentosa.com',
@@ -95,6 +97,12 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: textColor }]}>Informasi Toko</Text>
           
           <View style={[styles.infoCard, { backgroundColor: cardBg, borderColor }]}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Kode Pelanggan</Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>{displayProfile.kd_cus || '-'}</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: borderColor }]} />
+
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Alamat</Text>
               <Text style={[styles.infoValue, { color: textColor }]}>{displayProfile.address}</Text>

@@ -4,6 +4,7 @@ import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface User {
   id: string;
+  kd_cus: string;
   username: string;
   name: string;
   storeName: string;

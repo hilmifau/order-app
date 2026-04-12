@@ -1,4 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
+import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
 import { clearCart, removeFromCart, updateQuantity } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import * as Print from 'expo-print';
@@ -10,7 +11,9 @@ export default function ExploreScreen() {
   const dispatch = useAppDispatch();
   const { colorScheme } = useTheme();
   const cartItems = useAppSelector(state => state.cart.items);
+  const user = useAppSelector(state => state.auth.user);
   const [isOrdered, setIsOrdered] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const isDark = colorScheme === 'dark';
   const containerBg = isDark ? '#1a1a1a' : '#ffffff';
@@ -27,6 +30,8 @@ export default function ExploreScreen() {
     }, 0);
   };
 
+  console.log("user", user);
+  
 
 
   const handleUpdateQuantity = (kd_br: string, quantity: number) => {
@@ -97,13 +102,102 @@ export default function ExploreScreen() {
     );
   };
 
-  const handleOrder = () => {
+  const handleOrder = async () => {
+    console.log("---handleOrder---");
+    
     if (cartItems.length === 0) {
       Alert.alert('Keranjang Kosong', 'Silakan tambahkan barang terlebih dahulu');
       return;
     }
-    setIsOrdered(true);
-    Alert.alert('Order Berhasil', 'Order Anda telah dicatat. Anda sekarang bisa mencetak PDF.');
+    if (!user?.kd_cus) {
+      Alert.alert('Data Tidak Lengkap', 'Kode pelanggan tidak ditemukan. Silakan login ulang.');
+      return;
+    }
+    console.log("---handleOrder 1---");
+    
+    const now = new Date();
+    const pad2 = (value: number) => value.toString().padStart(2, '0');
+    const tgl = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const jam = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+
+    const total = calculateTotal();
+    console.log("---handleOrder 2---");
+
+    const masterPayload: PoNotePayload = {
+      tgl,
+      kd_cus: user.kd_cus,
+      jam,
+      nama_admin: user.username || user.name || 'Admin',
+      kpb: user.username || user.name || 'Admin',
+      ket: '',
+      status: 'PROSES ORDER',
+      total_po: total,
+      jenis: 'Anggota',
+      items: cartItems,
+    };
+        console.log("---handleOrder 2---", masterPayload);
+
+    setIsSubmitting(true);
+    try {
+      const poNoteRes = await createPoNote(masterPayload);
+      console.log('PO Note response:', poNoteRes);
+      
+      console.log('PO Note response:', poNoteRes);
+
+      let finalNoTran: string | null = null;
+      if (typeof poNoteRes?.data === 'number' || typeof poNoteRes?.data === 'string') {
+        finalNoTran = String(poNoteRes.data);
+      } else if (poNoteRes?.data && typeof poNoteRes.data === 'object') {
+        finalNoTran = String(
+          poNoteRes.data.no_tran || poNoteRes.data.NO_PO || poNoteRes.data.id || poNoteRes.data.po_no || ''
+        );
+      } else if (poNoteRes && typeof poNoteRes === 'object') {
+        finalNoTran = String(
+          poNoteRes.no_tran || poNoteRes.NO_PO || poNoteRes.id || poNoteRes.po_no || ''
+        );
+      }
+
+      finalNoTran = finalNoTran && finalNoTran !== 'undefined' && finalNoTran !== 'null' ? finalNoTran : null;
+      if (!finalNoTran) {
+        Alert.alert(
+          'Gagal Mendapatkan No. Transaksi',
+          'Response tidak mengandung no_tran valid. Lihat console untuk detail.'
+        );
+        throw new Error('Gagal mendapatkan no_tran dari PO Note');
+      }
+
+      let urut = 1;
+      for (const item of cartItems) {
+        const price = parseFloat(item.barang.h_anggota) || 0;
+        const subtotal = price * item.quantity;
+
+        const detailPayload: DetailPoNotePayload = {
+          no_tran: Number(finalNoTran),
+          NO_PO: finalNoTran,
+          NO_URUT: urut.toString(),
+          KD_BR: item.barang.kd_br,
+          RASA: item.barang.Ket || item.barang.jenis_produk || '',
+          QTY: item.quantity,
+          SAT: item.barang.satuan,
+          harga: price,
+          subtotal,
+          kd: item.barang.kd,
+          nama_br: item.barang.nama,
+        };
+
+        await createDetailPoNote(detailPayload);
+        urut += 1;
+      }
+
+      console.log('Order response:', { poNoteRes, no_tran: finalNoTran });
+      setIsOrdered(true);
+      Alert.alert('Order Berhasil', 'Order Anda telah dicatat. Anda sekarang bisa mencetak PDF.');
+    } catch (error) {
+      console.error('Order error:', error);
+      Alert.alert('Gagal Order', 'Terjadi kesalahan saat menyimpan order.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePrintPDF = async () => {
@@ -284,8 +378,9 @@ export default function ExploreScreen() {
               <TouchableOpacity 
                 style={styles.orderButton}
                 onPress={handleOrder}
+                disabled={isSubmitting}
               >
-                <Text style={styles.orderButtonText}>📋 Pesan</Text>
+                <Text style={styles.orderButtonText}>{isSubmitting ? '⏳ Menyimpan...' : '📋 Pesan'}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.pdfButton, !isOrdered && styles.pdfButtonDisabled]}

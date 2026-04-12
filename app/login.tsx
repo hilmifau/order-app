@@ -5,16 +5,16 @@ import { AppDispatch, RootState } from '@/store/store';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -37,6 +37,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [kdCus, setKdCus] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loginStatus, setLoginStatus] = useState<string | null>(null);
 
   // Debug log
   useEffect(() => {
@@ -53,18 +54,24 @@ export default function LoginScreen() {
   const inputBorder = isDark ? '#444' : '#ddd';
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim() || !kdCus.trim()) {
-      Alert.alert('Validasi', 'UserID, Password, dan Kode Pelanggan tidak boleh kosong');
+    if (!username.trim() || !password.trim()) {
+      setLoginStatus('Validasi gagal: UserID, Password, dan Kode Pelanggan wajib diisi.');
+      Alert.alert('Validasi', 'UserID, Password, dan Kode Pelanggan tidak ong');
       return;
     }
+    setLoginStatus('Mengirim login...');
     console.log("username:", username, "password:", password, "kdCus:", kdCus);
 
     try {
-      const result = await dispatch(loginAsync({ UserID: username, Pass: password, kd_cus: kdCus })).unwrap();
+      const result = await dispatch(
+        loginAsync({ UserID: username, Pass: password, kd_cus: kdCus.trim() })
+      ).unwrap();
       if (result.token) {
         await saveAuthToken(result.token);
       }
+      setLoginStatus('Login berhasil.');
     } catch (err: any) {
+      setLoginStatus('Login gagal.');
       Alert.alert('Login Gagal', err);
     }
   };
@@ -196,6 +203,12 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            {loginStatus && (
+              <View style={[styles.statusBox, { backgroundColor: isDark ? '#2f2f2f' : '#f7f7f7' }]}> 
+                <Text style={[styles.statusText, { color: textColor }]}>{loginStatus}</Text>
+              </View>
+            )}
+
             {/* Demo Credentials Info */}
             <View style={[styles.demoSection, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}>
               <Text style={[styles.demoTitle, { color: textColor }]}>Info Login:</Text>
@@ -305,6 +318,15 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  statusBox: {
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   demoSection: {
     borderRadius: 8,

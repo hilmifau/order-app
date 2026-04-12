@@ -1,4 +1,6 @@
 
+import axiosInstance from './axiosInstance';
+
 export interface LoginCredentials {
   UserID: string;
   Pass: string;
@@ -10,6 +12,7 @@ export interface AuthResponse {
   token: string;
   user: {
     id: string;
+    kd_cus: string;
     username: string;
     name: string;
     storeName: string;
@@ -21,91 +24,29 @@ export interface AuthResponse {
   message?: string;
 }
 
-// Mock data - TEMPORARY (akan diganti dengan real API nanti)
-const MOCK_USERS = [
-  {
-    id: 'USR001',
-    username: 'user1',
-    pass: 'pass123',
-    kd_cus: 'CUST001',
-    name: 'John Doe',
-    storeName: 'Store Alpha',
-    address: 'Jl. Raya No. 123, Jakarta',
-    phone: '021-12345678',
-    email: 'user1@store.com',
-    memberSince: '2023-01-15',
-  },
-  {
-    id: 'USR002',
-    username: 'admin',
-    pass: 'admin123',
-    kd_cus: 'CUST002',
-    name: 'Administrator',
-    storeName: 'Main Store',
-    address: 'Jl. Utama No. 456, Jakarta',
-    phone: '021-87654321',
-    email: 'admin@store.com',
-    memberSince: '2023-01-01',
-  },
-];
-
-// Mock API call to /pengguna endpoint
-// TODO: Replace dengan real API ketika endpoint /pengguna sudah siap
 export const loginApi = async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  console.log('Logging in with credentials:', credentials);
+  
   try {
-    // Simulasi network delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // MOCK: Cek user dari mock data
-    const user = MOCK_USERS.find(
-      (u) =>
-        u.username === credentials.UserID &&
-        u.pass === credentials.Pass &&
-        u.kd_cus === credentials.kd_cus
-    );
-
-    if (!user) {
-      return {
-        success: false,
-        token: '',
-        user: {} as any,
-        message: 'UserID, Password, atau Kode Pelanggan salah',
-      };
-    }
-
-    // Generate mock token
-    const token = `token_${user.id}_${Date.now()}`;
-
-    return {
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        storeName: user.storeName,
-        address: user.address,
-        phone: user.phone,
-        email: user.email,
-        memberSince: user.memberSince,
-      },
-    };
-
-    /* REAL API CALL (uncomment ketika API siap):
-    const response = await axiosInstance.post('/pengguna', {
+    const payload = {
       UserID: credentials.UserID,
       Pass: credentials.Pass,
-      kd_cus: credentials.kd_cus,
-    });
+      // kd_cus: credentials.kd_cus,
+    };
+
+    const response = await axiosInstance.post('/pengguna/login', payload);
 
     if (response.data && response.data.success) {
       const token = response.data.token || `token_${credentials.UserID}_${Date.now()}`;
+      console.log("---response---",response);
+      
 
       return {
         success: true,
         token,
         user: {
           id: response.data.user?.id || credentials.UserID,
+          kd_cus: response.data.user?.kd_cus || credentials.kd_cus,
           username: response.data.user?.username || credentials.UserID,
           name: response.data.user?.name || 'User',
           storeName: response.data.user?.storeName || 'Store',
@@ -123,13 +64,25 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
       user: {} as any,
       message: response.data?.message || 'Login failed',
     };
-    */
   } catch (error: any) {
+    let errorMessage = 'Login error';
+
+    // Coba ambil error message dari response API
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error.response?.statusText) {
+      errorMessage = error.response.statusText;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
     return {
       success: false,
       token: '',
       user: {} as any,
-      message: error.message || 'Login error',
+      message: errorMessage,
     };
   }
 };
