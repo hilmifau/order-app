@@ -1,5 +1,4 @@
 import { useTheme } from '@/hooks/use-theme';
-import { saveAuthToken } from '@/services/storageService';
 import { clearError, loginAsync } from '@/store/authSlice';
 import { AppDispatch, RootState } from '@/store/store';
 import { useRouter } from 'expo-router';
@@ -33,9 +32,8 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated]);
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [kdCus, setKdCus] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginStatus, setLoginStatus] = useState<string | null>(null);
 
@@ -54,21 +52,18 @@ export default function LoginScreen() {
   const inputBorder = isDark ? '#444' : '#ddd';
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      setLoginStatus('Validasi gagal: UserID, Password, dan Kode Pelanggan wajib diisi.');
-      Alert.alert('Validasi', 'UserID, Password, dan Kode Pelanggan tidak ong');
+    if (!email.trim() || !password.trim()) {
+      setLoginStatus('Validasi gagal: Email dan Password wajib diisi.');
+      Alert.alert('Validasi', 'Email dan Password wajib diisi.');
       return;
     }
     setLoginStatus('Mengirim login...');
-    console.log("username:", username, "password:", password, "kdCus:", kdCus);
+    console.log('email:', email, 'password:', password);
 
     try {
       const result = await dispatch(
-        loginAsync({ UserID: username, Pass: password, kd_cus: kdCus.trim() })
+        loginAsync({ email: email.trim(), password })
       ).unwrap();
-      if (result.token) {
-        await saveAuthToken(result.token);
-      }
       setLoginStatus('Login berhasil.');
     } catch (err: any) {
       setLoginStatus('Login gagal.');
@@ -97,9 +92,9 @@ export default function LoginScreen() {
 
           {/* Login Card */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            {/* Username Input */}
+            {/* Email Input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: textColor }]}>Username</Text>
+              <Text style={[styles.label, { color: textColor }]}>Email</Text>
               <TextInput
                 style={[
                   styles.input,
@@ -109,12 +104,13 @@ export default function LoginScreen() {
                     color: textColor,
                   },
                 ]}
-                placeholder="Masukkan username"
+                placeholder="Masukkan email"
                 placeholderTextColor={secondaryText}
-                value={username}
-                onChangeText={setUsername}
+                value={email}
+                onChangeText={setEmail}
                 editable={!loading}
                 autoCapitalize="none"
+                keyboardType="email-address"
               />
             </View>
 
@@ -150,26 +146,6 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* Kode Pelanggan Input */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: textColor }]}>Kode Pelanggan</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: inputBg,
-                    borderColor: inputBorder,
-                    color: textColor,
-                  },
-                ]}
-                placeholder="Masukkan kode pelanggan"
-                placeholderTextColor={secondaryText}
-                value={kdCus}
-                onChangeText={setKdCus}
-                editable={!loading}
-                autoCapitalize="none"
-              />
-            </View>
 
             {/* Error Message */}
             {error && (
@@ -209,20 +185,23 @@ export default function LoginScreen() {
               </View>
             )}
 
-            {/* Demo Credentials Info */}
+            {/* Info Login */}
             <View style={[styles.demoSection, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}>
               <Text style={[styles.demoTitle, { color: textColor }]}>Info Login:</Text>
               <Text style={[styles.demoInfo, { color: secondaryText }]}>
-                Masukkan UserID, Password, dan Kode Pelanggan yang telah diberikan.
+                Masukkan email dan password yang telah didaftarkan.
               </Text>
             </View>
           </View>
 
-          {/* Footer Info */}
+          {/* Footer - Register Link */}
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: secondaryText }]}>
-              Hubungi administrator untuk mendapatkan akses login Anda
+              Belum punya akun?{' '}
             </Text>
+            <TouchableOpacity onPress={() => router.push('/register')} disabled={loading}>
+              <Text style={[styles.footerLink, { color: accentColor }]}>Daftar Akun Baru</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -354,9 +333,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 14,
+  },
+  footerLink: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

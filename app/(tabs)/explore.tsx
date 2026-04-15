@@ -1,20 +1,43 @@
 import { useTheme } from '@/hooks/use-theme';
 import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
-import { clearCart, removeFromCart, updateQuantity } from '@/store/cartSlice';
+import { clearCart, removeFromCart, updateQuantity, addToCart } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
-import { Alert, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ExploreScreen() {
   const dispatch = useAppDispatch();
   const { colorScheme } = useTheme();
   const cartItems = useAppSelector(state => state.cart.items);
+  const favoriteItems = useAppSelector(state => state.favorites?.items || []);
   const user = useAppSelector(state => state.auth.user);
   const [isOrdered, setIsOrdered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
+  const generateDates = () => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i <= 30; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const formatted = `${yyyy}-${mm}-${dd}`;
+      const display = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+      dates.push({ value: formatted, label: display });
+    }
+    return dates;
+  };
+
+  const [deliveryDates] = useState(generateDates());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const isDark = colorScheme === 'dark';
   const containerBg = isDark ? '#1a1a1a' : '#ffffff';
   const headerBg = isDark ? '#242424' : '#f5f5f5';
@@ -31,7 +54,7 @@ export default function ExploreScreen() {
   };
 
   console.log("user", user);
-  
+
 
 
   const handleUpdateQuantity = (kd_br: string, quantity: number) => {
@@ -50,61 +73,91 @@ export default function ExploreScreen() {
     const handleQuantityChange = (text: string) => {
       setInputValue(text);
       const num = parseInt(text);
-      if (!isNaN(num) && num > 0) {
+      if (!isNaN(num) && num >= 0) {
         handleUpdateQuantity(item.kd_br, num);
       }
     };
 
     const handleBlur = () => {
       const num = parseInt(inputValue);
-      if (isNaN(num) || num <= 0) {
+      if (isNaN(num) || num < 0) {
         setInputValue('1');
         handleUpdateQuantity(item.kd_br, 1);
+      } else if (num === 0) {
+        dispatch(removeFromCart(item.kd_br));
       }
     };
 
     return (
       <View style={[styles.cartItemCard, { backgroundColor: cardBg }]}>
-        <View style={styles.cartItemContent}>
-          <Text style={styles.cartItemIcon}>📦</Text>
+        {/* Top Section: Icon and Name/Code */}
+        <View style={styles.cartItemTop}>
+          <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}>
+            <Text style={styles.cartItemIcon}>📦</Text>
+          </View>
           <View style={styles.cartItemInfo}>
-            <Text style={[styles.cartItemName, { color: textColor }]}>{item.barang.nama}</Text>
-            <Text style={[styles.cartItemCode, { color: isDark ? '#FFD700' : '#FF9800' }]}>Kode: {item.barang.kd_br}</Text>
-            <Text style={[styles.cartItemPrice, { color: textColor }]}>Rp {price.toLocaleString('id-ID')}</Text>
+            <Text style={[styles.cartItemName, { color: textColor }]} numberOfLines={2}>
+              {item.barang.nama}
+            </Text>
+            <Text style={[styles.cartItemCode, { color: isDark ? '#FFD700' : '#FF9800' }]}>
+              Kode: {item.barang.kd_br}
+            </Text>
           </View>
         </View>
-        <View style={styles.cartItemRight}>
-          <View style={styles.quantityControl}>
-            <TouchableOpacity 
-              style={[styles.quantityButton, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}
-              onPress={() => handleUpdateQuantity(item.kd_br, item.quantity - 1)}
-            >
-              <Text style={[styles.quantityButtonText, { color: textColor }]}>−</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={[styles.quantityInput, { color: textColor, backgroundColor: isDark ? '#1a1a1a' : '#ffffff', borderColor: isDark ? '#444' : '#ccc' }]}
-              value={inputValue}
-              onChangeText={handleQuantityChange}
-              onBlur={handleBlur}
-              keyboardType="numeric"
-              selectTextOnFocus
-            />
-            <TouchableOpacity 
-              style={[styles.quantityButton, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}
-              onPress={() => handleUpdateQuantity(item.kd_br, item.quantity + 1)}
-            >
-              <Text style={[styles.quantityButtonText, { color: textColor }]}>+</Text>
-            </TouchableOpacity>
+
+        {/* Divider */}
+        <View style={[styles.divider, { backgroundColor: isDark ? '#333' : '#eee' }]} />
+
+        {/* Bottom Section: Price, Quantity, and Subtotal */}
+        <View style={styles.cartItemBottom}>
+          <View style={styles.priceContainer}>
+            <Text style={[styles.priceLabel, { color: secondaryTextColor }]}>Harga Satuan</Text>
+            <Text style={[styles.cartItemPrice, { color: textColor }]}>
+              Rp {price.toLocaleString('id-ID')}
+            </Text>
           </View>
-          <Text style={[styles.cartItemTotal, { color: textColor }]}>Rp {itemTotal.toLocaleString('id-ID')}</Text>
+
+          <View style={styles.controlsContainer}>
+            <View style={[styles.quantityControl, { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor: isDark ? '#444' : '#ddd' }]}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => handleUpdateQuantity(item.kd_br, item.quantity - 1)}
+              >
+                <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>−</Text>
+              </TouchableOpacity>
+
+              <TextInput
+                style={[styles.quantityInput, { color: textColor }]}
+                value={inputValue}
+                onChangeText={handleQuantityChange}
+                onBlur={handleBlur}
+                keyboardType="numeric"
+                selectTextOnFocus
+              />
+
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => handleUpdateQuantity(item.kd_br, item.quantity + 1)}
+              >
+                <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.totalContainer}>
+              <Text style={[styles.totalLabelSmall, { color: secondaryTextColor }]}>Subtotal</Text>
+              <Text style={[styles.cartItemTotal, { color: textColor }]}>
+                Rp {itemTotal.toLocaleString('id-ID')}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
     );
   };
 
   const handleOrder = async () => {
-    console.log("---handleOrder---");
-    
+    console.log("---handleOrder---", user);
+
     if (cartItems.length === 0) {
       Alert.alert('Keranjang Kosong', 'Silakan tambahkan barang terlebih dahulu');
       return;
@@ -113,8 +166,12 @@ export default function ExploreScreen() {
       Alert.alert('Data Tidak Lengkap', 'Kode pelanggan tidak ditemukan. Silakan login ulang.');
       return;
     }
+    if (!selectedDate) {
+      Alert.alert('Pilih Tanggal', 'Silakan pilih Tanggal Pengiriman terlebih dahulu.');
+      return;
+    }
     console.log("---handleOrder 1---");
-    
+
     const now = new Date();
     const pad2 = (value: number) => value.toString().padStart(2, '0');
     const tgl = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
@@ -127,21 +184,21 @@ export default function ExploreScreen() {
       tgl,
       kd_cus: user.kd_cus,
       jam,
-      nama_admin: user.username || user.name || 'Admin',
+      nama_adm: user.username || user.name || 'Admin',
       kpb: user.username || user.name || 'Admin',
-      ket: '',
+      ket: selectedDate as string,
       status: 'PROSES ORDER',
       total_po: total,
       jenis: 'Anggota',
-      items: cartItems,
+      // items: cartItems,
     };
-        console.log("---handleOrder 2---", masterPayload);
+    console.log("---handleOrder 2---", masterPayload);
 
     setIsSubmitting(true);
     try {
       const poNoteRes = await createPoNote(masterPayload);
       console.log('PO Note response:', poNoteRes);
-      
+
       console.log('PO Note response:', poNoteRes);
 
       let finalNoTran: string | null = null;
@@ -205,124 +262,60 @@ export default function ExploreScreen() {
       Alert.alert('Order Belum Dikonfirmasi', 'Silakan klik tombol Order terlebih dahulu');
       return;
     }
-    
+
     // Generate PDF
     const orderDate = new Date().toLocaleDateString('id-ID');
     const orderTime = new Date().toLocaleTimeString('id-ID');
-    
-    // Create HTML content for PDF
-    let itemsHtml = '';
-    cartItems.forEach((item, index) => {
-      const price = parseFloat(item.barang.h_anggota) || 0;
-      const subtotal = price * item.quantity;
-      
-      itemsHtml += `
-        <div style="margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 15px;">
-          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">${index + 1}. ${item.barang.nama}</div>
-          <div style="margin-left: 20px; font-size: 12px; line-height: 1.6;">
-            <div>Kode: ${item.barang.kd_br}</div>
-            <div>Satuan: ${item.barang.satuan}</div>
-            <div>Harga: Rp ${price.toLocaleString('id-ID')}</div>
-            <div>Qty: ${item.quantity}</div>
-            <div style="font-weight: bold; margin-top: 5px;">Subtotal: Rp ${subtotal.toLocaleString('id-ID')}</div>
-          </div>
-        </div>
-      `;
-    });
-    
+
     const total = calculateTotal();
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              padding: 20px;
-              line-height: 1.4;
-            }
-            .header {
-              text-align: center;
-              border-bottom: 3px solid #000;
-              padding-bottom: 15px;
-              margin-bottom: 20px;
-            }
-            .title {
-              font-size: 24px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            }
-            .date-info {
-              font-size: 12px;
-              color: #666;
-              margin-top: 10px;
-            }
-            .section-title {
-              font-size: 16px;
-              font-weight: bold;
-              border-bottom: 2px solid #000;
-              padding-bottom: 8px;
-              margin-top: 20px;
-              margin-bottom: 15px;
-            }
-            .total {
-              margin-top: 20px;
-              padding-top: 15px;
-              border-top: 3px solid #000;
-              font-size: 18px;
-              font-weight: bold;
-              text-align: right;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 2px solid #000;
-              font-style: italic;
-              color: #666;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">INVOICE PESANAN</div>
-            <div class="date-info">
-              <div>Tanggal: ${orderDate}</div>
-              <div>Waktu: ${orderTime}</div>
-            </div>
-          </div>
-          
-          <div class="section-title">DETAIL BARANG</div>
-          ${itemsHtml}
-          
-          <div class="total">
-            TOTAL: Rp ${total.toLocaleString('id-ID')}
-          </div>
-          
-          <div class="footer">
-            Terima kasih telah berbelanja!
-          </div>
-        </body>
-      </html>
-    `;
+
+    // Map cart items to PdfItem format
+    const pdfItems: PdfItem[] = cartItems.map(item => ({
+      nama: item.barang.nama,
+      kd_br: item.barang.kd_br,
+      satuan: item.barang.satuan,
+      price: parseFloat(item.barang.h_anggota) || 0,
+      quantity: item.quantity,
+      subtotal: (parseFloat(item.barang.h_anggota) || 0) * item.quantity,
+    }));
+
+    const html = generateInvoiceHtml(
+      user ? {
+        name: user.name,
+        username: user.username,
+        storeName: user.storeName,
+        kd_cus: user.kd_cus,
+        email: user.email
+      } : null,
+      pdfItems,
+      total,
+      orderDate,
+      orderTime
+    );
 
     try {
       // Generate PDF
       const { uri } = await Print.printToFileAsync({ html });
-      
+
       // Share or download the PDF
       if (Platform.OS === 'web') {
         // Web: open in new tab
         window.open(uri, '_blank');
         Alert.alert('PDF Berhasil', 'PDF invoice telah dibuka di tab baru!');
+
+        // Kosongkan keranjang dan reset state setelah print
+        dispatch(clearCart());
+        setIsOrdered(false);
       } else {
         // Android/iOS: share the PDF
         await Sharing.shareAsync(uri, {
           UTI: '.pdf',
           mimeType: 'application/pdf',
         });
+
+        // Kosongkan keranjang dan reset state setelah sharing
+        dispatch(clearCart());
+        setIsOrdered(false);
         Alert.alert('Berhasil', 'PDF Invoice telah berhasil dibuat dan dishare!');
       }
     } catch (error) {
@@ -336,6 +329,23 @@ export default function ExploreScreen() {
     dispatch(clearCart());
   };
 
+  const handleAddFavorites = () => {
+    let addedCount = 0;
+    favoriteItems.forEach((fav: any) => {
+      const existing = cartItems.find((item: any) => item.kd_br === fav.kd_br);
+      if (!existing) {
+        dispatch(addToCart({ barang: fav, quantity: 1 }));
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      Alert.alert('Sukses', `${addedCount} barang favorit ditambahkan ke keranjang`);
+    } else {
+      Alert.alert('Info', 'Semua barang favorit sudah ada di keranjang');
+    }
+  };
+
 
   const total = calculateTotal();
 
@@ -343,8 +353,19 @@ export default function ExploreScreen() {
     <View style={[styles.container, { backgroundColor: containerBg }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: headerBg, borderBottomColor: headerBorder }]}>
-        <Text style={[styles.headerTitle, { color: textColor }]}>🛒 Keranjang</Text>
+        <Text style={[styles.headerTitle, { color: textColor }]}>Keranjang</Text>
       </View>
+
+      {/* Add Favorites Button */}
+      {favoriteItems.length > 0 && (
+        <TouchableOpacity 
+          style={[styles.addFavoritesButton, { backgroundColor: cardBg, borderColor: headerBorder }]} 
+          onPress={handleAddFavorites}
+        >
+          <Ionicons name="heart" size={20} color="#E53935" style={{ marginRight: 8 }} />
+          <Text style={[styles.addFavoritesText, { color: textColor }]}>Tambah Semua Favorit ke Keranjang</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Cart Items */}
       {cartItems.length > 0 ? (
@@ -362,27 +383,38 @@ export default function ExploreScreen() {
 
           {/* Order Summary */}
           <View style={[styles.summarySection, { backgroundColor: cardBg, borderTopColor: isDark ? '#333' : '#ddd' }]}>
-            <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: isDark ? '#333' : '#ddd' }]}>
+
+            {/* Delivery Date Selection */}
+            <View style={[styles.summaryRow, { borderBottomWidth: 1, borderBottomColor: isDark ? '#333' : '#eee', paddingBottom: 15, marginBottom: 5 }]}>
+              <Text style={[styles.totalLabelSmall, { color: textColor, fontSize: 13, fontWeight: '600' }]}>Tanggal Kirim</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateSelectorButton, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}>
+                <Text style={[styles.dateSelectorText, { color: isDark ? '#FFD700' : '#FF9800' }]}>
+                  {selectedDate ? (deliveryDates.find(d => d.value === selectedDate)?.label || selectedDate) : 'Pilih Tanggal'} ▼
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: isDark ? '#333' : '#ddd', borderTopWidth: 0 }]}>
               <Text style={[styles.totalLabel, { color: textColor }]}>Total</Text>
               <Text style={[styles.totalValue, { color: isDark ? '#FFD700' : '#FF9800' }]}>Rp {total.toLocaleString('id-ID')}</Text>
             </View>
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.clearButton}
                 onPress={resetOrder}
               >
                 <Text style={styles.clearButtonText}>Kosongkan</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.orderButton}
                 onPress={handleOrder}
                 disabled={isSubmitting}
               >
                 <Text style={styles.orderButtonText}>{isSubmitting ? '⏳ Menyimpan...' : '📋 Pesan'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.pdfButton, !isOrdered && styles.pdfButtonDisabled]}
                 onPress={handlePrintPDF}
                 disabled={!isOrdered}
@@ -398,6 +430,45 @@ export default function ExploreScreen() {
           <Text style={[styles.emptyText, { color: textColor }]}>Keranjang kosong</Text>
         </View>
       )}
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: headerBorder }]}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Pilih Tanggal Pengiriman</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Text style={{ color: isDark ? '#FFD700' : '#FF9800', fontSize: 20, fontWeight: 'bold' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={deliveryDates}
+              keyExtractor={item => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.dateItem,
+                    { borderBottomColor: headerBorder },
+                    selectedDate === item.value && { backgroundColor: isDark ? '#333' : '#eee' }
+                  ]}
+                  onPress={() => {
+                    setSelectedDate(item.value);
+                    setShowDatePicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.dateItemText,
+                    { color: selectedDate === item.value ? (isDark ? '#FFD700' : '#FF9800') : textColor },
+                    selectedDate === item.value && { fontWeight: 'bold' }
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -413,11 +484,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: '#242424',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    height: 60,
   },
   backButton: {
     width: 40,
@@ -433,11 +506,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
-    marginLeft: 12,
+    textAlign: 'center',
   },
   spacer: {
     width: 40,
@@ -446,81 +518,112 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   cartItemCard: {
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  cartItemContent: {
+  cartItemTop: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
+    marginRight: 10,
   },
   cartItemIcon: {
-    fontSize: 28,
-    marginRight: 12,
+    fontSize: 18,
   },
   cartItemInfo: {
     flex: 1,
-    flexWrap: 'wrap',
   },
   cartItemName: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-    flexWrap: 'wrap',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+    marginBottom: 2,
   },
   cartItemCode: {
     fontSize: 11,
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    width: '100%',
+    marginBottom: 12,
+  },
+  cartItemBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  priceContainer: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
     marginBottom: 2,
   },
   cartItemPrice: {
     fontSize: 12,
+    fontWeight: '600',
   },
-  cartItemRight: {
+  controlsContainer: {
     alignItems: 'flex-end',
+    gap: 8,
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    marginBottom: 6,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 4,
+    height: 30,
   },
   quantityButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 3,
   },
   quantityButtonText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   quantityInput: {
     fontSize: 13,
-    fontWeight: '600',
-    minWidth: 35,
-    width: 35,
-    height: 28,
+    fontWeight: '700',
+    minWidth: 24,
     textAlign: 'center',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 0,
+    padding: 0,
+    marginHorizontal: 4,
+  },
+  totalContainer: {
+    alignItems: 'flex-end',
+  },
+  totalLabelSmall: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
   cartItemTotal: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   summarySection: {
-    padding: 16,
+    padding: 12,
     borderTopWidth: 1,
   },
   summaryRow: {
@@ -542,7 +645,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   totalLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   totalValue: {
@@ -572,31 +675,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#333',
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   clearButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   orderButton: {
     flex: 1,
     backgroundColor: '#FFD700',
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   orderButtonText: {
     color: '#000',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   pdfButton: {
     flex: 1,
     backgroundColor: '#0066FF',
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   pdfButtonDisabled: {
@@ -605,7 +708,7 @@ const styles = StyleSheet.create({
   },
   pdfButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   pdfButtonTextDisabled: {
@@ -629,5 +732,57 @@ const styles = StyleSheet.create({
   emptyText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
+  },
+  dateSelectorButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  dateSelectorText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    borderRadius: 10,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  dateItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+  },
+  dateItemText: {
+    fontSize: 13,
+  },
+  addFavoritesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  addFavoritesText: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

@@ -1,10 +1,14 @@
 import { useTheme } from '@/hooks/use-theme';
 import { Gudang as ApiGudang, Barang, getBarangsWithPagination, getGudangs } from '@/services/menuApi';
 import { addToCart } from '@/store/cartSlice';
+import { toggleFavorite } from '@/store/favoriteSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { addMoreBarangs, setBarangs as setBarangsAction, setError, setGudangs as setGudangsAction, setInitialized, setLoading } from '@/store/inventorySlice';
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+const PLACEHOLDER_IMAGE = require('@/assets/images/product_placeholder.png');
 
 interface Gudang {
   kd: string;
@@ -20,6 +24,7 @@ export default function HomeScreen() {
   const { colorScheme } = useTheme();
   const { gudangs: reduxGudangs, barangs: reduxBarangs, loading: reduxLoading, error: reduxError, isInitialized } = useAppSelector(state => state.inventory);
   const cartItems = useAppSelector(state => state.cart.items);
+  const favoriteItems = useAppSelector(state => state.favorites?.items || []);
   const [gudangs, setGudangs] = useState<Gudang[]>([]);
   const [selectedGudang, setSelectedGudang] = useState<string | null>(null);
   const [filteredBarangs, setFilteredBarangs] = useState<Barang[]>([]);
@@ -28,14 +33,14 @@ export default function HomeScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [gudangExpanded, setGudangExpanded] = useState(true);
-  
+  const [showGudangModal, setShowGudangModal] = useState(false);
+
   // Responsive layout
   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
   const isTablet = screenDimensions.width >= 768;
   const gudangColumns = isTablet ? 3 : 2;
   const barangColumns = isTablet ? 3 : 2;
-  
+
   const isDark = colorScheme === 'dark';
   const containerBg = isDark ? '#1a1a1a' : '#ffffff';
   const headerBg = isDark ? '#242424' : '#f5f5f5';
@@ -58,8 +63,12 @@ export default function HomeScreen() {
     if (!isInitialized) {
       loadGudangsAndData();
     } else {
-      // Use data from Redux
-      updateGudangCounts(reduxBarangs);
+      // Use data from Redux — reconstruct local gudangs if empty
+      if (gudangs.length === 0 && reduxGudangs.length > 0) {
+        processGudangs(reduxGudangs, reduxBarangs);
+      } else {
+        updateGudangCounts(reduxBarangs);
+      }
       applyFilters(reduxBarangs, selectedGudang, search);
     }
   }, [isInitialized]);
@@ -68,19 +77,19 @@ export default function HomeScreen() {
     try {
       dispatch(setLoading(true));
       dispatch(setError(null));
-      
+
       // Load gudangs from API
       const gudangList = await getGudangs();
       dispatch(setGudangsAction(gudangList));
-      
+
       // Load barangs
       const result = await getBarangsWithPagination(1, ITEMS_PER_PAGE, '', undefined);
       dispatch(setBarangsAction(result.data));
-      
+
       // Process gudangs with barang data
       processGudangs(gudangList, result.data);
       applyFilters(result.data, null, '');
-      
+
       setCurrentPage(1);
       setTotalPages(result.totalPages);
       dispatch(setInitialized(true));
@@ -105,7 +114,7 @@ export default function HomeScreen() {
         const gudangKd = (item.kd || '').trim();
         return barangKd === gudangKd;
       }).length;
-      
+
       return {
         kd: item.kd,
         name: item.nama || item.kd || 'Undefined',
@@ -121,7 +130,7 @@ export default function HomeScreen() {
   // Get theme-aware color for gudang
   const getGudangColor = (colorIndex: number, isAll: boolean = false) => {
     if (isAll) return '#555';
-    
+
     const colors = ['#C85A54', '#7C4DFF', '#D946EF', '#B8860B', '#1E3A8A', '#16A34A', '#DC2626', '#9333EA'];
     return colors[colorIndex % colors.length];
   };
@@ -129,7 +138,7 @@ export default function HomeScreen() {
   const updateGudangCounts = (barangList: Barang[]) => {
     setGudangs(prevGudangs => {
       if (prevGudangs.length === 0) return prevGudangs;
-      
+
       return prevGudangs.map(gudang => {
         const count = barangList.filter(item => {
           const itemKd = (item.kd || '').trim();
@@ -161,9 +170,9 @@ export default function HomeScreen() {
     if (searchQuery && searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(item =>
-        item.nama.toLowerCase().includes(searchLower) ||
-        item.kd_br.toLowerCase().includes(searchLower) ||
-        item.kd_sp.toLowerCase().includes(searchLower)
+        (item.nama || '').toLowerCase().includes(searchLower) ||
+        (item.kd_br || '').toLowerCase().includes(searchLower) ||
+        (item.kd_sp || '').toLowerCase().includes(searchLower)
       );
       console.log(`Filter by search '${searchQuery}': found ${filtered.length} items`); // Debug log
     }
@@ -180,10 +189,10 @@ export default function HomeScreen() {
         setLoadingMore(true);
       }
       dispatch(setError(null));
-      
+
       // Pass gudang filter to API if available
       const result = await getBarangsWithPagination(page, ITEMS_PER_PAGE, searchQuery, gudangFilter || undefined);
-      
+
       if (page === 1) {
         dispatch(setBarangsAction(result.data));
         updateGudangCounts(result.data);
@@ -195,7 +204,7 @@ export default function HomeScreen() {
         // IMPORTANT: When loading more, reapply filter to ensure gudang filter is maintained
         applyFilters(newBarangs, gudangFilter, searchQuery);
       }
-      
+
       setCurrentPage(page);
       setTotalPages(result.totalPages);
     } catch (err) {
@@ -217,7 +226,14 @@ export default function HomeScreen() {
     const newGudang = selectedGudang === kd ? null : kd;
     setSelectedGudang(newGudang);
     setCurrentPage(1);
+    setShowGudangModal(false);
     fetchData(1, search, newGudang);
+  };
+
+  const getSelectedGudangName = () => {
+    if (!selectedGudang) return 'Semua Gudang';
+    const found = gudangs.find(g => g.kd === selectedGudang);
+    return found ? found.name : selectedGudang;
   };
 
   const handleSearch = (query: string) => {
@@ -243,20 +259,41 @@ export default function HomeScreen() {
   const BarangCard = ({ barang }: { barang: Barang }) => {
     const quantity = getQuantity(barang.kd_br);
     const price = parseFloat(barang.h_anggota) || 0;
-    
+    const isFavorite = favoriteItems.some((fav: Barang) => fav.kd_br === barang.kd_br);
+
     return (
       <View style={[styles.barangCard, { backgroundColor: cardBg }]}>
+        <View style={styles.barangCardImageContainer}>
+          <Image
+            source={barang.gambar ? { uri: barang.gambar } : PLACEHOLDER_IMAGE}
+            style={styles.barangImage}
+            resizeMode="cover"
+          />
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={() => dispatch(toggleFavorite(barang))}
+          >
+            <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={20} color={isFavorite ? '#E53935' : '#fff'} />
+          </TouchableOpacity>
+          {quantity > 0 && (
+            <View style={styles.quantityBadge}>
+              <Text style={styles.quantityBadgeText}>{quantity}</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.barangCardContent}>
-          <Text style={[styles.barangName, { color: textColor }]} numberOfLines={2}>{barang.nama}</Text>
+          <Text style={[styles.barangName, { color: textColor }]}>{barang.nama}</Text>
           <Text style={[styles.barangKode, { color: isDark ? '#FFD700' : '#FF9800' }]}>Kode: {barang.kd_br}</Text>
+        </View>
+        <View style={styles.barangCardContent}>
           <Text style={[styles.barangPrice, { color: textColor }]}>Rp {price.toLocaleString('id-ID')}</Text>
           <Text style={[styles.barangSatuan, { color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)' }]}>{barang.satuan}</Text>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.addButton, quantity > 0 && styles.addButtonActive]}
           onPress={() => quantity === 0 && handleAddToCart(barang)}
         >
-          <Text style={styles.addButtonText}>🛒 {quantity > 0 ? quantity : 'Tambah'}</Text>
+          <Text style={styles.addButtonText}>🛒 {quantity > 0 ? 'Dalam Keranjang' : 'Tambah'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -280,53 +317,79 @@ export default function HomeScreen() {
         <Text style={[styles.headerTitle, { color: textColor }]}>Daftar Barang</Text>
       </View>
 
-      {/* Gudang Title */}
-      <View style={[styles.sectionTitleContainer, { backgroundColor: sectionBg }]}>
-        <Text style={[styles.sectionTitle, { color: textColor }]}>Pilih Gudang (Warehouse)</Text>
-        <TouchableOpacity 
-          style={styles.expandButton}
-          onPress={() => setGudangExpanded(!gudangExpanded)}
-        >
-          <Text style={styles.expandButtonText}>{gudangExpanded ? '▼' : '▶'}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Gudang Selector Button */}
+      <TouchableOpacity
+        style={[styles.gudangSelectorButton, { backgroundColor: headerBg, borderBottomColor: headerBorder }]}
+        onPress={() => setShowGudangModal(true)}
+      >
+        <View style={styles.gudangSelectorContent}>
+          <Text style={[styles.gudangSelectorLabel, { color: secondaryTextColor }]}>Gudang</Text>
+          <Text style={[styles.gudangSelectorValue, { color: textColor }]}>{getSelectedGudangName()}</Text>
+        </View>
+        <Text style={[styles.gudangSelectorArrow, { color: isDark ? '#FFD700' : '#FF9800' }]}>▶</Text>
+      </TouchableOpacity>
 
-      {/* Gudang Filter Grid - Collapsible */}
-      {gudangExpanded && (
-      <View style={[styles.gudangGridContainer, { backgroundColor: headerBg, borderBottomColor: headerBorder }]}>
-        <FlatList
-          key={`gudang-${gudangColumns}`}
-          data={[...gudangs, { kd: 'all', name: 'Semua', count: reduxBarangs.length, colorIndex: -1 }]}
-          renderItem={({ item }) => {
-            const isAll = item.kd === 'all';
-            const bgColor = getGudangColor(item.colorIndex, isAll);
-            return (
+      {/* Gudang Selection Modal */}
+      <Modal
+        visible={showGudangModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowGudangModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: containerBg }]}>
+            {/* Modal Header */}
+            <View style={[styles.modalHeader, { backgroundColor: headerBg, borderBottomColor: headerBorder }]}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Pilih Gudang</Text>
               <TouchableOpacity
-                style={[
-                  styles.gudangCard,
-                  { backgroundColor: bgColor },
-                  (isAll ? !selectedGudang : selectedGudang === item.kd) && styles.gudangCardSelected
-                ]}
-                onPress={() => handleGudangSelect(isAll ? '' : item.kd)}
+                style={styles.modalCloseButton}
+                onPress={() => setShowGudangModal(false)}
               >
-                <Text style={styles.gudangCardName}>{item.name}</Text>
-                <Text style={styles.gudangCardCount}>{item.count} items</Text>
+                <Text style={[styles.modalCloseText, { color: isDark ? '#FFD700' : '#FF9800' }]}>✕</Text>
               </TouchableOpacity>
-            );
-          }}
-          keyExtractor={item => item.kd}
-          numColumns={gudangColumns}
-          scrollEnabled={true}
-          columnWrapperStyle={styles.gudangGridRow}
-          nestedScrollEnabled={true}
-        />
-      </View>
-      )}
+            </View>
+
+            {/* Gudang List */}
+            <FlatList
+              key={`gudang-modal-${gudangColumns}`}
+              data={[{ kd: 'all', name: 'Semua Gudang', count: reduxBarangs.length, colorIndex: -1 }, ...gudangs]}
+              renderItem={({ item }) => {
+                const isAll = item.kd === 'all';
+                const bgColor = getGudangColor(item.colorIndex, isAll);
+                const isSelected = isAll ? !selectedGudang : selectedGudang === item.kd;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.gudangModalCard,
+                      { backgroundColor: bgColor },
+                      isSelected && styles.gudangModalCardSelected,
+                    ]}
+                    onPress={() => handleGudangSelect(isAll ? '' : item.kd)}
+                  >
+                    <View style={styles.gudangModalCardContent}>
+                      <Text style={styles.gudangModalCardName}>{item.name}</Text>
+                      <Text style={styles.gudangModalCardCount}>{item.count} items</Text>
+                    </View>
+                    {isSelected && (
+                      <Text style={styles.gudangModalCheckmark}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              keyExtractor={item => item.kd}
+              numColumns={gudangColumns}
+              columnWrapperStyle={styles.gudangModalRow}
+              contentContainerStyle={styles.gudangModalList}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Search Bar */}
       <View style={[styles.searchContainer, { backgroundColor: headerBg, borderBottomColor: headerBorder }]}>
         <TextInput
-          style={[styles.searchInput, { 
+          style={[styles.searchInput, {
             color: textColor,
             backgroundColor: isDark ? '#333' : '#e5e5e5',
             borderColor: isDark ? '#444' : '#ccc'
@@ -393,11 +456,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: '#242424',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    height: 60,
   },
   sectionTitleContainer: {
     paddingHorizontal: 16,
@@ -413,12 +478,110 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-  expandButton: {
-    padding: 8,
+  gudangSelectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
-  expandButtonText: {
-    color: '#FFD700',
+  gudangSelectorContent: {
+    flex: 1,
+  },
+  gudangSelectorLabel: {
     fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  gudangSelectorValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  gudangSelectorArrow: {
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(128, 128, 128, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  gudangModalList: {
+    padding: 12,
+    paddingBottom: 40,
+  },
+  gudangModalRow: {
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  gudangModalCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 18,
+    marginHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 90,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  gudangModalCardSelected: {
+    borderColor: '#FFD700',
+    borderWidth: 3,
+  },
+  gudangModalCardContent: {
+    alignItems: 'center',
+  },
+  gudangModalCardName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  gudangModalCardCount: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  gudangModalCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    color: '#FFD700',
+    fontSize: 18,
     fontWeight: 'bold',
   },
   searchContainer: {
@@ -437,43 +600,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     borderWidth: 1,
     borderColor: '#444',
-  },
-  gudangGridContainer: {
-    maxHeight: 250,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  gudangGridRow: {
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  gudangCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 80,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  gudangCardSelected: {
-    borderColor: '#FFD700',
-    borderWidth: 3,
-  },
-  gudangCardName: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  gudangCardCount: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
-    textAlign: 'center',
   },
   gudangButton: {
     backgroundColor: '#333',
@@ -510,11 +636,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
-    marginLeft: 12,
+    textAlign: 'center',
   },
   spacer: {
     width: 40,
@@ -580,33 +705,77 @@ const styles = StyleSheet.create({
   barangCard: {
     flex: 1,
     borderRadius: 12,
-    padding: 12,
     marginHorizontal: 6,
-    minHeight: 220,
+    minHeight: 280,
     flexDirection: 'column',
-    justifyContent: 'space-between',
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  barangCardImageContainer: {
+    width: '100%',
+    height: 100,
+    backgroundColor: '#333',
+    position: 'relative',
+  },
+  barangImage: {
+    width: '100%',
+    height: '100%',
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  quantityBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  quantityBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   barangCardContent: {
     flex: 1,
+    padding: 10,
   },
   barangName: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 6,
+    marginBottom: 3,
     lineHeight: 18,
   },
   barangKode: {
     fontSize: 11,
-    marginBottom: 6,
   },
   barangPrice: {
     fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   barangSatuan: {
     fontSize: 11,
-    marginBottom: 8,
   },
   menuItemsSection: {
     padding: 12,
@@ -670,13 +839,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#4CAF50',
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: 'center',
   },
   addButtonActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#DC2626',
   },
   addButtonText: {
     fontSize: 16,

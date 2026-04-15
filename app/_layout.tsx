@@ -41,6 +41,7 @@ function RootLayoutContent() {
         <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="login" />
+            <Stack.Screen name="register" />
             <Stack.Screen name="(tabs)" />
           </Stack>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

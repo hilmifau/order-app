@@ -11,16 +11,16 @@ export default function TabLayout() {
   const { colorScheme } = useTheme();
   const router = useRouter();
   const { isAuthenticated, isInitialized } = useSelector((state: RootState) => state.auth);
-  
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
       router.replace('/login');
     }
   }, [isAuthenticated, isInitialized]);
-  
+
   const isDark = colorScheme === 'dark';
-  
+
   // Colors for different states
   const tabBarBg = isDark ? '#1a1a1a' : '#ffffff';
   const tabBarBorder = isDark ? '#333' : '#e5e5e5';
@@ -43,7 +43,7 @@ export default function TabLayout() {
           paddingTop: 8,
           paddingBottom: 12,
           paddingHorizontal: 16,
-          height: 80,
+          height: 70,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -59,21 +59,21 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 28, color }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>🏠</Text>,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Keranjang',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 28, color }}>🛒</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>🛒</Text>,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profil',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 28, color }}>👤</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>👤</Text>,
         }}
       />
     </Tabs>

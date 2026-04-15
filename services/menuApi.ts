@@ -1,4 +1,5 @@
 import axiosInstance from './axiosInstance';
+import { getAuthToken } from './storageService';
 
 export interface Barang {
   kd_br: string;
@@ -35,6 +36,7 @@ export interface Barang {
   sistem_hadiah: string | null;
   Ket: string;
   Barcode: string;
+  gambar?: string;
 }
 
 export interface Gudang {
@@ -79,7 +81,12 @@ export const getBarangsWithPagination = async (
       url += `&gudang=${encodeURIComponent(gudang)}`;
     }
     
-    const response = await axiosInstance.get(url);
+    const token = await getAuthToken();
+    const response = await axiosInstance.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     
     if (response.data && response.data.data) {
       const total = response.data.pagination?.total || response.data.data.length;
@@ -106,7 +113,12 @@ export const getBarangsWithPagination = async (
 // Get semua barang (legacy, tanpa pagination)
 export const getBarangs = async (): Promise<Barang[]> => {
   try {
-    const response = await axiosInstance.get('/barangs');
+    const token = await getAuthToken();
+    const response = await axiosInstance.get('/barangs', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     if (response.data && response.data.data) {
       return response.data.data;
     }
@@ -120,13 +132,20 @@ export const getBarangs = async (): Promise<Barang[]> => {
 // Get gudang (warehouse) list
 export const getGudangs = async (): Promise<Gudang[]> => {
   try {
-    const response = await axiosInstance.get('/jenis-produk');
+    const token = await getAuthToken();
+    const response = await axiosInstance.get('/jenis-produk', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('--- getGudangs raw response ---', JSON.stringify(response.data));
     if (response.data && response.data.data) {
+      console.log('--- getGudangs data count ---', response.data.data.length);
       return response.data.data;
     }
     return response.data;
-  } catch (error) {
-    console.error('Error fetching gudangs:', error);
+  } catch (error: any) {
+    console.error('Error fetching gudangs:', error?.response?.status, error?.response?.data || error.message);
     throw error;
   }
 };

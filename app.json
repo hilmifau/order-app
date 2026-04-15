@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "order",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
     "updates": {
       "enabled": false
     },
