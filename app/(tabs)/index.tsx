@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const PLACEHOLDER_IMAGE = require('@/assets/images/product_placeholder.png');
+const PLACEHOLDER_IMAGE = require('@/assets/images/product_placeholder.jpg');
 
 interface Gudang {
   kd: string;
@@ -23,6 +23,7 @@ export default function HomeScreen() {
   const dispatch = useAppDispatch();
   const { colorScheme } = useTheme();
   const { gudangs: reduxGudangs, barangs: reduxBarangs, loading: reduxLoading, error: reduxError, isInitialized } = useAppSelector(state => state.inventory);
+  const { isAuthenticated } = useAppSelector(state => state.auth);
   const cartItems = useAppSelector(state => state.cart.items);
   const favoriteItems = useAppSelector(state => state.favorites?.items || []);
   const [gudangs, setGudangs] = useState<Gudang[]>([]);
@@ -58,8 +59,10 @@ export default function HomeScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Initialize data from API on first load
+  // Initialize data from API on first load (only if authenticated)
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     if (!isInitialized) {
       loadGudangsAndData();
     } else {
@@ -71,7 +74,7 @@ export default function HomeScreen() {
       }
       applyFilters(reduxBarangs, selectedGudang, search);
     }
-  }, [isInitialized]);
+  }, [isInitialized, isAuthenticated]);
 
   const loadGudangsAndData = async () => {
     try {
@@ -839,16 +842,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#61d665ff',
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: 'center',
   },
   addButtonActive: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#FFD700',
   },
   addButtonText: {
-    fontSize: 16,
+    fontSize: 14,
   },
   loadingContainer: {
     flex: 1,

@@ -75,12 +75,9 @@ export const getOrdersByCustomer = async (kd_cus: string): Promise<any[]> => {
       },
     });
     
-    console.log(`Fetching orders for: [${kd_cus}]`);
-    
     // Jika backend tidak melakukan filtering otomatis, kita filter di client
     if (response.data && response.data.data) {
       const allOrders = response.data.data;
-      console.log(`Total orders from API: ${allOrders.length}`);
       
       const filtered = allOrders.filter((o: any) => {
         const orderKdCus = (o.kd_cus || o.kdcus || '').toString().trim();
@@ -88,7 +85,6 @@ export const getOrdersByCustomer = async (kd_cus: string): Promise<any[]> => {
         return orderKdCus === targetKdCus;
       });
       
-      console.log(`Filtered orders: ${filtered.length}`);
       return filtered;
     }
     

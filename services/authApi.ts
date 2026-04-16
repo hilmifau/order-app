@@ -32,8 +32,6 @@ export interface AuthResponse {
 }
 
 export const loginApi = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  console.log('Logging in with credentials:', credentials);
-
   try {
     const payload = {
       email: credentials.email,
@@ -45,7 +43,6 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
     if (response.data && response.data.success) {
       const userData = response.data.data?.user || response.data.user;
       const token = response.data.data?.token || response.data.token || '';
-      console.log('---response---', response);
 
       return {
         success: true,
@@ -94,8 +91,6 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
 };
 
 export const registerApi = async (credentials: RegisterCredentials): Promise<AuthResponse> => {
-  console.log('Registering with credentials:', credentials);
-
   try {
     const response = await axiosInstance.post('/register', credentials);
 

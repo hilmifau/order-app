@@ -138,9 +138,7 @@ export const getGudangs = async (): Promise<Gudang[]> => {
         Authorization: `Bearer ${token}`,
       },
     });
-    console.log('--- getGudangs raw response ---', JSON.stringify(response.data));
     if (response.data && response.data.data) {
-      console.log('--- getGudangs data count ---', response.data.data.length);
       return response.data.data;
     }
     return response.data;

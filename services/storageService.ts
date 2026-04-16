@@ -1,14 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
-const AUTH_TOKEN_KEY = '@auth_token';
-const USER_DATA_KEY = '@user_data';
+const AUTH_TOKEN_KEY = 'auth_token';
+const USER_DATA_KEY = 'user_data';
+const FAVORITES_KEY = 'favorites_data';
+const CART_KEY = 'cart_data';
 
 /**
- * Simpan authentication token ke AsyncStorage
+ * Simpan authentication token ke SecureStore (Encrypted)
  */
 export const saveAuthToken = async (token: string): Promise<void> => {
   try {
-    await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
   } catch (error) {
     console.error('Error saving auth token:', error);
     throw error;
@@ -16,11 +19,11 @@ export const saveAuthToken = async (token: string): Promise<void> => {
 };
 
 /**
- * Ambil authentication token dari AsyncStorage
+ * Ambil authentication token dari SecureStore
  */
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
     return token;
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -29,11 +32,11 @@ export const getAuthToken = async (): Promise<string | null> => {
 };
 
 /**
- * Hapus authentication token dari AsyncStorage
+ * Hapus authentication token dari SecureStore
  */
 export const removeAuthToken = async (): Promise<void> => {
   try {
-    await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
   } catch (error) {
     console.error('Error removing auth token:', error);
     throw error;
@@ -78,11 +81,60 @@ export const removeUser = async (): Promise<void> => {
 };
 
 /**
- * Clear semua data (untuk logout)
+ * Simpan data favorit ke AsyncStorage
+ */
+export const saveFavorites = async (items: any[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(items));
+  } catch (error) {
+    console.error('Error saving favorites:', error);
+  }
+};
+
+/**
+ * Ambil data favorit dari AsyncStorage
+ */
+export const getFavorites = async (): Promise<any[]> => {
+  try {
+    const data = await AsyncStorage.getItem(FAVORITES_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error getting favorites:', error);
+    return [];
+  }
+};
+
+/**
+ * Simpan data keranjang ke AsyncStorage
+ */
+export const saveCart = async (items: any[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(CART_KEY, JSON.stringify(items));
+  } catch (error) {
+    console.error('Error saving cart:', error);
+  }
+};
+
+/**
+ * Ambil data keranjang dari AsyncStorage
+ */
+export const getCart = async (): Promise<any[]> => {
+  try {
+    const data = await AsyncStorage.getItem(CART_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error getting cart:', error);
+    return [];
+  }
+};
+
+/**
+ * Clear data autentikasi (untuk logout) - Data Favorit & Keranjang dipertahankan sesuai request
  */
 export const clearAllStorage = async (): Promise<void> => {
   try {
-    await AsyncStorage.clear();
+    await AsyncStorage.removeItem(USER_DATA_KEY);
+    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
   } catch (error) {
     console.error('Error clearing storage:', error);
     throw error;

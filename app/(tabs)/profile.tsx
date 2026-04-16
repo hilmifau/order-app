@@ -41,7 +41,7 @@ export default function ProfileScreen() {
   }, [user, isFetching, isAuthenticated, dispatch]);
 
   // Use user data dari Redux jika available, otherwise use empty object with User type
-  const displayProfile: any = user || {};
+  const displayProfile: Partial<User> = user || {};
 
 
   const handleLogout = async () => {

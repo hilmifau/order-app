@@ -38,10 +38,12 @@ export const loginAsync = createAsyncThunk(
   async (credentials: LoginCredentials, { rejectWithValue }) => {
     try {
       const response = await loginApi(credentials);
+      console.log("---response", response);
+
       if (!response.success) {
         return rejectWithValue(response.message || 'Login failed');
       }
-      
+
       // Save to persistent storage
       if (response.token) {
         await saveAuthToken(response.token);
@@ -49,7 +51,7 @@ export const loginAsync = createAsyncThunk(
       if (response.user) {
         await saveUser(response.user);
       }
-      
+
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || 'An error occurred');
@@ -66,7 +68,7 @@ export const registerAsync = createAsyncThunk(
       if (!response.success) {
         return rejectWithValue(response.message || 'Registrasi gagal');
       }
-      
+
       // Save to persistent storage
       if (response.token) {
         await saveAuthToken(response.token);
@@ -74,7 +76,7 @@ export const registerAsync = createAsyncThunk(
       if (response.user) {
         await saveUser(response.user);
       }
-      
+
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Terjadi kesalahan saat registrasi');
@@ -89,7 +91,7 @@ export const checkAuthAsync = createAsyncThunk(
     try {
       const token = await getAuthToken();
       const user = await getUser();
-      
+
       if (!token) {
         return rejectWithValue('No token found');
       }
@@ -116,12 +118,12 @@ export const fetchCurrentUserAsync = createAsyncThunk(
       if (!response.success) {
         return rejectWithValue(response.message || 'Gagal mengambil data user');
       }
-      
+
       // Save data user yang baru diambil ke storage
       if (response.user) {
         await saveUser(response.user);
       }
-      
+
       return response.user;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Terjadi kesalahan saat mengambil profil');
