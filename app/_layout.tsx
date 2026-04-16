@@ -102,7 +102,7 @@ function RootLayoutContent() {
     return (
       <View style={{ flex: 1, backgroundColor: '#fff6ea', justifyContent: 'center', alignItems: 'center' }}>
         <Image
-          source={require('@/assets/images/order-logo-new.png')}
+          source={require('@/assets/images/order_logo_new.png')}
           style={{ width: 180, height: 180, marginBottom: 20 }}
           resizeMode="contain"
         />
