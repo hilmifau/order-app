@@ -1,4 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
+import { formatDateDdMmYyyy } from '@/utils/dateDisplay';
 import { fetchCurrentUserAsync, logoutAsync, User } from '@/store/authSlice';
 import { AppDispatch, RootState } from '@/store/store';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,9 +31,6 @@ export default function ProfileScreen() {
       setIsFetching(true);
       dispatch(fetchCurrentUserAsync())
         .unwrap()
-        .then((data) => {
-          console.log('--- Profil --- User data fetched successfully:', data);
-        })
         .catch((err) => {
           console.warn('--- Profil --- Failed to fetch user data:', err);
         })
@@ -45,8 +43,6 @@ export default function ProfileScreen() {
 
 
   const handleLogout = async () => {
-    console.log('handleLogout called!');
-
     // Use window.confirm for web, Alert.alert for native
     const confirmed = Platform.OS === 'web'
       ? window.confirm('Apakah Anda yakin ingin keluar?')
@@ -58,14 +54,11 @@ export default function ProfileScreen() {
       });
 
     if (!confirmed) {
-      console.log('Logout cancelled');
       return;
     }
 
     try {
-      console.log('Logging out via API...');
       await dispatch(logoutAsync()).unwrap();
-      console.log('Logout complete, redirecting...');
       router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -143,7 +136,9 @@ export default function ProfileScreen() {
                 <Text style={[styles.infoIcon]}>🗓️</Text>
                 <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Anggota Sejak</Text>
               </View>
-              <Text style={[styles.infoValue, { color: textColor }]}>{displayProfile?.memberSince || '-'}</Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>
+                {displayProfile?.memberSince ? formatDateDdMmYyyy(displayProfile.memberSince) : '-'}
+              </Text>
             </View>
           </View>
         </View>

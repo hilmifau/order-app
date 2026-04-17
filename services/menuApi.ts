@@ -34,7 +34,7 @@ export interface Barang {
   qty_br: string | null;
   status_hadiah: string | null;
   sistem_hadiah: string | null;
-  Ket: string;
+  ket: string;
   Barcode: string;
   gambar?: string;
 }
@@ -80,25 +80,25 @@ export const getBarangsWithPagination = async (
     if (gudang && gudang.trim()) {
       url += `&gudang=${encodeURIComponent(gudang)}`;
     }
-    
+
     const token = await getAuthToken();
     const response = await axiosInstance.get(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    
+
     if (response.data && response.data.data) {
       const total = response.data.pagination?.total || response.data.data.length;
       const totalPages = response.data.pagination?.total_pages || Math.ceil(total / limit);
-      
+
       return {
         data: response.data.data,
         total,
         totalPages,
       };
     }
-    
+
     return {
       data: response.data,
       total: response.data.length,

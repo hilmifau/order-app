@@ -2,8 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
-import { useEffect } from 'react';
-import { ActivityIndicator, Alert, Image, View } from 'react-native';
+import { useCallback, useEffect, useRef } from 'react';
+import { ActivityIndicator, Alert, AppState, Image, View } from 'react-native';
 import 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -69,33 +69,44 @@ function RootLayoutContent() {
     dispatch(checkAuthAsync());
   }, [dispatch]);
 
-  // Check for OTA updates (hanya jalan di build native)
-  useEffect(() => {
-    async function onFetchUpdateAsync() {
-      try {
-        const update = await Updates.checkForUpdateAsync();
+  const otaCheckInFlight = useRef(false);
 
-        if (update.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          Alert.alert(
-            'Pembaruan Tersedia',
-            'Versi terbaru aplikasi telah diunduh. Restart sekarang untuk menerapkan perubahan?',
-            [
-              { text: 'Nanti', style: 'cancel' },
-              { text: 'Restart', onPress: async () => await Updates.reloadAsync() },
-            ]
-          );
-        }
-      } catch (error) {
-        // Abaikan error di development/simulator
-        console.log('Update check skipped or failed:', error);
-      }
-    }
+  const applyOtaIfAvailable = useCallback(async () => {
+    if (__DEV__ || !Updates.isEnabled) return;
+    if (otaCheckInFlight.current) return;
+    otaCheckInFlight.current = true;
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (!update.isAvailable) return;
 
-    if (!__DEV__) {
-      onFetchUpdateAsync();
+      await Updates.fetchUpdateAsync();
+      Alert.alert(
+        'Pembaruan Tersedia',
+        'Aplikasi telah diperbarui dari server. Restart sekarang untuk memakai versi terbaru (tanpa unduh ulang dari Play Store / App Store).',
+        [
+          { text: 'Nanti', style: 'cancel' },
+          { text: 'Restart', onPress: () => Updates.reloadAsync() },
+        ]
+      );
+    } catch (error) {
+      void error;
+    } finally {
+      otaCheckInFlight.current = false;
     }
   }, []);
+
+  useEffect(() => {
+    applyOtaIfAvailable();
+  }, [applyOtaIfAvailable]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        applyOtaIfAvailable();
+      }
+    });
+    return () => sub.remove();
+  }, [applyOtaIfAvailable]);
 
   // Loading state saat check token (Custom Splash Screen)
   if (!isInitialized) {

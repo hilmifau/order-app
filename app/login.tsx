@@ -37,11 +37,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginStatus, setLoginStatus] = useState<string | null>(null);
 
-  // Debug log
-  useEffect(() => {
-    console.log('LoginScreen mounted, isAuthenticated:', isAuthenticated);
-  }, [isAuthenticated]);
-
   // Colors based on theme
   const containerBg = isDark ? '#1a1a1a' : '#ffffff';
   const cardBg = isDark ? '#242424' : '#f5f5f5';
@@ -58,7 +53,6 @@ export default function LoginScreen() {
       return;
     }
     setLoginStatus('Mengirim login...');
-    console.log('email:', email, 'password:', password);
 
     try {
       const result = await dispatch(

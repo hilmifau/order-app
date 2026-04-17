@@ -38,7 +38,6 @@ export const loginAsync = createAsyncThunk(
   async (credentials: LoginCredentials, { rejectWithValue }) => {
     try {
       const response = await loginApi(credentials);
-      console.log("---response", response);
 
       if (!response.success) {
         return rejectWithValue(response.message || 'Login failed');

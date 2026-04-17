@@ -1,3 +1,5 @@
+import { formatDateDdMmYyyy } from '@/utils/dateDisplay';
+
 export interface PdfItem {
   nama: string;
   kd_br: string;
@@ -23,7 +25,8 @@ export const generateInvoiceHtml = (
   items: PdfItem[],
   total: number,
   orderDate: string,
-  orderTime: string
+  orderTime: string,
+  noTran?: string | null
 ): string => {
   let itemsHtml = '';
   items.forEach((item, index) => {
@@ -61,12 +64,18 @@ export const generateInvoiceHtml = (
           .title {
             font-size: 24px;
             font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .no-tran {
+            font-size: 16px;
+            font-weight: bold;
+            color: #E53935;
             margin-bottom: 10px;
           }
           .date-info {
             font-size: 12px;
             color: #666;
-            margin-top: 10px;
+            margin-top: 5px;
           }
           .section-title {
             font-size: 16px;
@@ -97,8 +106,9 @@ export const generateInvoiceHtml = (
       <body>
         <div class="header">
           <div class="title">INVOICE PESANAN</div>
+          ${noTran ? `<div class="no-tran">No. Transaksi: ${noTran}</div>` : ''}
           <div class="date-info">
-            <div>Tanggal: ${orderDate}</div>
+            <div>Tanggal: ${formatDateDdMmYyyy(orderDate)}</div>
             <div>Waktu: ${orderTime}</div>
           </div>
         </div>

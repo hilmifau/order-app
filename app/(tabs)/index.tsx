@@ -6,9 +6,56 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { addMoreBarangs, setBarangs as setBarangsAction, setError, setGudangs as setGudangsAction, setInitialized, setLoading } from '@/store/inventorySlice';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const PLACEHOLDER_IMAGE = require('@/assets/images/product_placeholder.jpg');
+
+// Data default sebagai fallback jika API gagal
+const DEFAULT_GUDANGS: ApiGudang[] = [
+  { kd: 'B 2', nama: 'G.LANTAI 2', dept: 'GUDANG', counter: 'B 2' },
+  { kd: 'C 3', nama: 'G.DASAR', dept: 'GUDANG', counter: 'C 3' },
+  { kd: 'D 4', nama: 'HADIAH', dept: 'GUDANG', counter: 'D 4' },
+  { kd: 'E 5', nama: 'ATK', dept: 'GUDANG', counter: 'E 5' },
+];
+
+const DEFAULT_BARANGS: Barang[] = [
+  {
+    kd_br: '-',
+    nama: 'GERY CHOCOLATOS CHEESE 2000 WJU5 @60 BKS',
+    kd: 'B 2       ',
+    kd_sp: 'SNS/GARUDA',
+    jenis_produk: 'Barang',
+    satuan: 'DUS',
+    status: 'Tidak Digunakan               ',
+    HPP: '93984',
+    h_anggota: '97500.00',
+    h_to: '97500',
+    h_boman: '0',
+    h_royan: '0',
+    h_cabang: '93000',
+    h_non: '97500',
+    markup: '0.0',
+    s_awal: '0',
+    j_beli: '0',
+    j_jual: '0',
+    r_beli: '0',
+    r_jual: '0',
+    d_min: '0',
+    d_pls: '0',
+    stok_akhir: '0',
+    minim_stok: '5',
+    hpp_beli: '93984',
+    tgl_beli: '2022-10-18 00:00:00',
+    tgl_jual: '2022-11-21 00:00:00',
+    kd_hd: null,
+    qty_hd: null,
+    qty_br: null,
+    status_hadiah: null,
+    sistem_hadiah: null,
+    ket: 'SAMA',
+    Barcode: '-',
+  },
+];
 
 interface Gudang {
   kd: string;
@@ -35,6 +82,7 @@ export default function HomeScreen() {
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showGudangModal, setShowGudangModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Responsive layout
   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
@@ -110,6 +158,15 @@ export default function HomeScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Reset filters and search on refresh to get fresh data
+    setSelectedGudang(null);
+    setSearch('');
+    await loadGudangsAndData();
+    setRefreshing(false);
+  };
+
   const processGudangs = (gudangList: ApiGudang[], barangList: Barang[] = []) => {
     const gudangArray = gudangList.map((item, index) => {
       const count = barangList.filter(barang => {
@@ -126,7 +183,6 @@ export default function HomeScreen() {
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
 
-    console.log('Loaded gudangs:', gudangArray);
     setGudangs(gudangArray);
   };
 
@@ -166,7 +222,6 @@ export default function HomeScreen() {
         const itemKd = (item.kd || '').trim();
         return itemKd === normalizedGudang;
       });
-      console.log(`Filter by gudang '${normalizedGudang}': found ${filtered.length} items`); // Debug log
     }
 
     // Filter by search
@@ -177,7 +232,6 @@ export default function HomeScreen() {
         (item.kd_br || '').toLowerCase().includes(searchLower) ||
         (item.kd_sp || '').toLowerCase().includes(searchLower)
       );
-      console.log(`Filter by search '${searchQuery}': found ${filtered.length} items`); // Debug log
     }
 
     setFilteredBarangs(filtered);
@@ -257,49 +311,6 @@ export default function HomeScreen() {
 
   const handleAddToCart = (barang: Barang) => {
     dispatch(addToCart({ barang, quantity: 1 }));
-  };
-
-  const BarangCard = ({ barang }: { barang: Barang }) => {
-    const quantity = getQuantity(barang.kd_br);
-    const price = parseFloat(barang.h_anggota) || 0;
-    const isFavorite = favoriteItems.some((fav: Barang) => fav.kd_br === barang.kd_br);
-
-    return (
-      <View style={[styles.barangCard, { backgroundColor: cardBg }]}>
-        <View style={styles.barangCardImageContainer}>
-          <Image
-            source={barang.gambar ? { uri: barang.gambar } : PLACEHOLDER_IMAGE}
-            style={styles.barangImage}
-            resizeMode="cover"
-          />
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={() => dispatch(toggleFavorite(barang))}
-          >
-            <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={20} color={isFavorite ? '#E53935' : '#fff'} />
-          </TouchableOpacity>
-          {quantity > 0 && (
-            <View style={styles.quantityBadge}>
-              <Text style={styles.quantityBadgeText}>{quantity}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.barangCardContent}>
-          <Text style={[styles.barangName, { color: textColor }]}>{barang.nama}</Text>
-          <Text style={[styles.barangKode, { color: isDark ? '#FFD700' : '#FF9800' }]}>Kode: {barang.kd_br}</Text>
-        </View>
-        <View style={styles.barangCardContent}>
-          <Text style={[styles.barangPrice, { color: textColor }]}>Rp {price.toLocaleString('id-ID')}</Text>
-          <Text style={[styles.barangSatuan, { color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)' }]}>{barang.satuan}</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.addButton, quantity > 0 && styles.addButtonActive]}
-          onPress={() => quantity === 0 && handleAddToCart(barang)}
-        >
-          <Text style={styles.addButtonText}>🛒 {quantity > 0 ? 'Dalam Keranjang' : 'Tambah'}</Text>
-        </TouchableOpacity>
-      </View>
-    );
   };
 
   if (reduxLoading) {
@@ -419,13 +430,31 @@ export default function HomeScreen() {
           <FlatList
             key={`barang-${barangColumns}`}
             data={displayedBarangs}
-            renderItem={({ item }) => <BarangCard barang={item} />}
+            renderItem={({ item }) => (
+              <BarangCard
+                barang={item}
+                quantity={getQuantity(item.kd_br)}
+                isFavorite={favoriteItems.some((fav: Barang) => fav.kd_br === item.kd_br)}
+                onAddToCart={() => handleAddToCart(item)}
+                onToggleFavorite={() => dispatch(toggleFavorite(item))}
+                theme={{ isDark, cardBg, textColor }}
+              />
+            )}
             keyExtractor={item => item.kd_br}
             numColumns={barangColumns}
             scrollEnabled={true}
             columnWrapperStyle={styles.barangRow}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.3}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#FFD700']}
+                tintColor={isDark ? '#FFD700' : '#FFD700'}
+                progressBackgroundColor="transparent"
+              />
+            }
             ListFooterComponent={
               loadingMore ? (
                 <View style={styles.footerLoader}>
@@ -444,6 +473,88 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+// Separate component for Barang Card for better performance and TS clarity
+const BarangCard = ({
+  barang,
+  quantity,
+  isFavorite,
+  onAddToCart,
+  onToggleFavorite,
+  theme
+}: {
+  barang: Barang;
+  quantity: number;
+  isFavorite: boolean;
+  onAddToCart: () => void;
+  onToggleFavorite: () => void;
+  theme: { isDark: boolean; cardBg: string; textColor: string };
+}) => {
+  const price = parseFloat(barang.h_anggota) || 0;
+
+  return (
+    <View style={[styles.barangCard, { backgroundColor: theme.cardBg }]}>
+      <View style={styles.barangCardImageContainer}>
+        <Image
+          source={barang.gambar ? { uri: barang.gambar } : PLACEHOLDER_IMAGE}
+          style={styles.barangImage}
+          resizeMode="cover"
+        />
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={onToggleFavorite}
+        >
+          <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={20} color={isFavorite ? '#E53935' : '#fff'} />
+        </TouchableOpacity>
+        {quantity > 0 && (
+          <View style={styles.quantityBadge}>
+            <Text style={styles.quantityBadgeText}>{quantity}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.barangCardContent}>
+        <Text style={[styles.barangName, { color: theme.textColor }]}>{barang.nama}</Text>
+        <View style={styles.ketContainer}>
+          <Text style={[styles.barangKode, { color: theme.isDark ? '#FFD700' : '#FF9800' }]}>Harga: </Text>
+          {(() => {
+            const ket = (barang.ket || '').toUpperCase().trim();
+            let iconName: any = "remove";
+            let iconColor = "#AAAAAA";
+
+            if (ket.toUpperCase() === 'NAIK') {
+              iconName = "trending-up";
+              iconColor = "#FF5252";
+            } else if (ket.toUpperCase() === 'TURUN') {
+              iconName = "trending-down";
+              iconColor = "#4CAF50";
+            } else if (ket.toUpperCase() === 'SAMA') {
+              iconName = "arrow-forward";
+              iconColor = theme.isDark ? "#FFFFFF" : "#888888";
+            }
+
+            return (
+              <View style={styles.ketWrapper}>
+                <Ionicons name={iconName} size={14} color={iconColor} style={styles.ketIcon} />
+                <Text style={[styles.barangKode, { color: iconColor, fontWeight: 'bold' }]}>{ket}</Text>
+              </View>
+            );
+          })()}
+        </View>
+      </View>
+      <View style={styles.barangCardContent}>
+        <Text style={[styles.barangPrice, { color: theme.textColor }]}>Rp {price.toLocaleString('id-ID')}</Text>
+        <Text style={[styles.barangSatuan, { color: theme.isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)' }]}>{barang.satuan}</Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.addButton, quantity > 0 && styles.addButtonActive]}
+        onPress={onAddToCart}
+        disabled={quantity > 0}
+      >
+        <Text style={styles.addButtonText}>🛒 {quantity > 0 ? 'Dalam Keranjang' : 'Tambah'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -772,6 +883,18 @@ const styles = StyleSheet.create({
   barangKode: {
     fontSize: 11,
   },
+  ketContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  ketWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ketIcon: {
+    marginRight: 4,
+  },
   barangPrice: {
     fontSize: 15,
     fontWeight: 'bold',
@@ -865,86 +988,3 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 });
-
-// Data default sebagai fallback jika API gagal
-const DEFAULT_GUDANGS: ApiGudang[] = [
-  { kd: 'B 2', nama: 'G.LANTAI 2', dept: 'GUDANG', counter: 'B 2' },
-  { kd: 'C 3', nama: 'G.DASAR', dept: 'GUDANG', counter: 'C 3' },
-  { kd: 'D 4', nama: 'HADIAH', dept: 'GUDANG', counter: 'D 4' },
-  { kd: 'E 5', nama: 'ATK', dept: 'GUDANG', counter: 'E 5' },
-];
-
-const DEFAULT_BARANGS: Barang[] = [
-  {
-    kd_br: '-',
-    nama: 'GERY CHOCOLATOS CHEESE 2000 WJU5 @60 BKS',
-    kd: 'B 2       ',
-    kd_sp: 'SNS/GARUDA',
-    jenis_produk: 'Barang',
-    satuan: 'DUS',
-    status: 'Tidak Digunakan               ',
-    HPP: '93984',
-    h_anggota: '97500.00',
-    h_to: '97500',
-    h_boman: '0',
-    h_royan: '0',
-    h_cabang: '93000',
-    h_non: '97500',
-    markup: '0.0',
-    s_awal: '0',
-    j_beli: '0',
-    j_jual: '0',
-    r_beli: '0',
-    r_jual: '0',
-    d_min: '0',
-    d_pls: '0',
-    stok_akhir: '0',
-    minim_stok: '5',
-    hpp_beli: '93984',
-    tgl_beli: '2022-10-18 00:00:00',
-    tgl_jual: '2022-11-21 00:00:00',
-    kd_hd: null,
-    qty_hd: null,
-    qty_br: null,
-    status_hadiah: null,
-    sistem_hadiah: null,
-    Ket: 'SAMA',
-    Barcode: '-',
-  },
-  {
-    kd_br: '000000',
-    nama: 'CHARM NIGHT 2P @24*10',
-    kd: '17        ',
-    kd_sp: 'SURADI',
-    jenis_produk: 'Barang',
-    satuan: 'DUS',
-    status: 'Tidak Digunakan               ',
-    HPP: '250338',
-    h_anggota: '257800.00',
-    h_to: '257800',
-    h_boman: '0',
-    h_royan: '0',
-    h_cabang: '250800',
-    h_non: '257800',
-    markup: '0.0',
-    s_awal: '0',
-    j_beli: '0',
-    j_jual: '0',
-    r_beli: '0',
-    r_jual: '0',
-    d_min: '0',
-    d_pls: '0',
-    stok_akhir: '0',
-    minim_stok: '5',
-    hpp_beli: '250338',
-    tgl_beli: null,
-    tgl_jual: null,
-    kd_hd: null,
-    qty_hd: null,
-    qty_br: null,
-    status_hadiah: null,
-    sistem_hadiah: null,
-    Ket: 'SAMA',
-    Barcode: '-',
-  },
-];

@@ -1,13 +1,14 @@
 import { useTheme } from '@/hooks/use-theme';
 import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
-import { clearCart, removeFromCart, updateQuantity, addToCart } from '@/store/cartSlice';
+import { addToCart, clearCart, removeFromCart, updateQuantity } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { formatDateDdMmYyyy, formatDateLabelWithWeekday, formatNowDdMmYyyy, formatTime24h } from '@/utils/dateDisplay';
 import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
+import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function ExploreScreen() {
   const dispatch = useAppDispatch();
@@ -17,6 +18,7 @@ export default function ExploreScreen() {
   const user = useAppSelector(state => state.auth.user);
   const [isOrdered, setIsOrdered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [noTran, setNoTran] = useState<string | null>(null);
 
   const generateDates = () => {
     const dates = [];
@@ -28,7 +30,7 @@ export default function ExploreScreen() {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
       const formatted = `${yyyy}-${mm}-${dd}`;
-      const display = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+      const display = formatDateLabelWithWeekday(d);
       dates.push({ value: formatted, label: display });
     }
     return dates;
@@ -52,10 +54,6 @@ export default function ExploreScreen() {
       return total + price * item.quantity;
     }, 0);
   };
-
-  console.log("user", user);
-
-
 
   const handleUpdateQuantity = (kd_br: string, quantity: number) => {
     if (quantity <= 0) {
@@ -156,8 +154,6 @@ export default function ExploreScreen() {
   };
 
   const handleOrder = async () => {
-    console.log("---handleOrder---", user);
-
     if (cartItems.length === 0) {
       Alert.alert('Keranjang Kosong', 'Silakan tambahkan barang terlebih dahulu');
       return;
@@ -170,15 +166,12 @@ export default function ExploreScreen() {
       Alert.alert('Pilih Tanggal', 'Silakan pilih Tanggal Pengiriman terlebih dahulu.');
       return;
     }
-    console.log("---handleOrder 1---");
-
     const now = new Date();
     const pad2 = (value: number) => value.toString().padStart(2, '0');
     const tgl = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
     const jam = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
 
     const total = calculateTotal();
-    console.log("---handleOrder 2---");
 
     const masterPayload: PoNotePayload = {
       tgl,
@@ -192,14 +185,9 @@ export default function ExploreScreen() {
       jenis: 'Anggota',
       // items: cartItems,
     };
-    console.log("---handleOrder 2---", masterPayload);
-
     setIsSubmitting(true);
     try {
       const poNoteRes = await createPoNote(masterPayload);
-      console.log('PO Note response:', poNoteRes);
-
-      console.log('PO Note response:', poNoteRes);
 
       let finalNoTran: string | null = null;
       if (typeof poNoteRes?.data === 'number' || typeof poNoteRes?.data === 'string') {
@@ -233,7 +221,7 @@ export default function ExploreScreen() {
           NO_PO: finalNoTran,
           NO_URUT: urut.toString(),
           KD_BR: item.barang.kd_br,
-          RASA: item.barang.Ket || item.barang.jenis_produk || '',
+          RASA: item.barang.ket || item.barang.jenis_produk || '',
           QTY: item.quantity,
           SAT: item.barang.satuan,
           harga: price,
@@ -246,7 +234,7 @@ export default function ExploreScreen() {
         urut += 1;
       }
 
-      console.log('Order response:', { poNoteRes, no_tran: finalNoTran });
+      setNoTran(finalNoTran); // Save the transaction number
       setIsOrdered(true);
       Alert.alert('Order Berhasil', 'Order Anda telah dicatat. Anda sekarang bisa mencetak PDF.');
     } catch (error) {
@@ -264,8 +252,8 @@ export default function ExploreScreen() {
     }
 
     // Generate PDF
-    const orderDate = new Date().toLocaleDateString('id-ID');
-    const orderTime = new Date().toLocaleTimeString('id-ID');
+    const orderDate = formatNowDdMmYyyy();
+    const orderTime = formatTime24h();
 
     const total = calculateTotal();
 
@@ -290,7 +278,8 @@ export default function ExploreScreen() {
       pdfItems,
       total,
       orderDate,
-      orderTime
+      orderTime,
+      noTran // Pass transaction number to PDF
     );
 
     try {
@@ -326,6 +315,7 @@ export default function ExploreScreen() {
 
   const resetOrder = () => {
     setIsOrdered(false);
+    setNoTran(null);
     dispatch(clearCart());
   };
 
@@ -358,8 +348,8 @@ export default function ExploreScreen() {
 
       {/* Add Favorites Button */}
       {favoriteItems.length > 0 && (
-        <TouchableOpacity 
-          style={[styles.addFavoritesButton, { backgroundColor: cardBg, borderColor: headerBorder }]} 
+        <TouchableOpacity
+          style={[styles.addFavoritesButton, { backgroundColor: cardBg, borderColor: headerBorder }]}
           onPress={handleAddFavorites}
         >
           <Ionicons name="heart" size={20} color="#E53935" style={{ marginRight: 8 }} />
@@ -389,7 +379,10 @@ export default function ExploreScreen() {
               <Text style={[styles.totalLabelSmall, { color: textColor, fontSize: 13, fontWeight: '600' }]}>Tanggal Kirim</Text>
               <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateSelectorButton, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}>
                 <Text style={[styles.dateSelectorText, { color: isDark ? '#FFD700' : '#FF9800' }]}>
-                  {selectedDate ? (deliveryDates.find(d => d.value === selectedDate)?.label || selectedDate) : 'Pilih Tanggal'} ▼
+                  {selectedDate
+                    ? deliveryDates.find(d => d.value === selectedDate)?.label || formatDateDdMmYyyy(selectedDate)
+                    : 'Pilih Tanggal'}{' '}
+                  ▼
                 </Text>
               </TouchableOpacity>
             </View>
@@ -419,7 +412,7 @@ export default function ExploreScreen() {
                 onPress={handlePrintPDF}
                 disabled={!isOrdered}
               >
-                <Text style={[styles.pdfButtonText, !isOrdered && styles.pdfButtonTextDisabled]}>� Print PDF</Text>
+                <Text style={[styles.pdfButtonText, !isOrdered && styles.pdfButtonTextDisabled]}>Print PDF</Text>
               </TouchableOpacity>
             </View>
           </View>

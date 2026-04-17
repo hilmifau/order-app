@@ -13,7 +13,7 @@
     "updates": {
       "url": "https://u.expo.dev/f36efb6b-e0b5-48b8-9cc5-7fc4c3641d19",
       "enabled": true,
-      "checkOnLaunch": "ALWAYS",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "ios": {
@@ -40,11 +40,12 @@
     },
     "plugins": [
       "expo-router",
+      "expo-updates",
       [
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.1.0"
+            "usesCleartextTraffic": true
           }
         }
       ],
