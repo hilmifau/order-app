@@ -102,6 +102,27 @@ function countBarangsPerGudangKd(barangList: Barang[]): Map<string, number> {
   return map;
 }
 
+function getBarangIdentityKey(barang: Barang): string {
+  const kdBr = (barang.kd_br || '').trim();
+  const kd = (barang.kd || '').trim();
+  const kdSp = (barang.kd_sp || '').trim();
+  const nama = (barang.nama || '').trim().toLowerCase();
+  const satuan = (barang.satuan || '').trim().toLowerCase();
+  return [kdBr, kd, kdSp, nama, satuan].join('|');
+}
+
+function dedupeBarangs(barangList: Barang[]): Barang[] {
+  const seen = new Set<string>();
+  const unique: Barang[] = [];
+  for (const barang of barangList) {
+    const identityKey = getBarangIdentityKey(barang);
+    if (seen.has(identityKey)) continue;
+    seen.add(identityKey);
+    unique.push(barang);
+  }
+  return unique;
+}
+
 const TickerItem = React.memo(function TickerItem({
   barang,
   textMain,
@@ -203,7 +224,7 @@ function BarangRunningTicker({
           >
             {barangs.map((b) => (
               <TickerItem
-                key={`t1-${b.kd_br}`}
+                key={`t1-${getBarangIdentityKey(b)}`}
                 barang={b}
                 textMain={textMain}
                 textMuted={textMuted}
@@ -214,7 +235,7 @@ function BarangRunningTicker({
           <View style={styles.tickerSegment}>
             {barangs.map((b) => (
               <TickerItem
-                key={`t2-${b.kd_br}`}
+                key={`t2-${getBarangIdentityKey(b)}`}
                 barang={b}
                 textMain={textMain}
                 textMuted={textMuted}
@@ -402,7 +423,7 @@ export default function HomeScreen() {
   };
 
   const applyFilters = (barangList: Barang[], gudang: string | null, searchQuery: string) => {
-    let filtered = barangList;
+    let filtered = dedupeBarangs(barangList);
 
     // Filter by gudang
     if (gudang && gudang.trim()) {
@@ -445,12 +466,14 @@ export default function HomeScreen() {
       const result = await getBarangsWithPagination(page, ITEMS_PER_PAGE, searchQuery, gudangFilter || undefined);
 
       if (page === 1) {
-        dispatch(setBarangsAction(result.data));
-        updateGudangCounts(result.data);
-        applyFilters(result.data, gudangFilter, searchQuery);
+        const uniqueBarangs = dedupeBarangs(result.data);
+        dispatch(setBarangsAction(uniqueBarangs));
+        updateGudangCounts(uniqueBarangs);
+        applyFilters(uniqueBarangs, gudangFilter, searchQuery);
       } else {
-        const newBarangs = [...reduxBarangs, ...result.data];
-        dispatch(addMoreBarangs(result.data));
+        const uniqueIncoming = dedupeBarangs(result.data);
+        const newBarangs = dedupeBarangs([...reduxBarangs, ...uniqueIncoming]);
+        dispatch(addMoreBarangs(uniqueIncoming));
         updateGudangCounts(newBarangs);
         // IMPORTANT: When loading more, reapply filter to ensure gudang filter is maintained
         applyFilters(newBarangs, gudangFilter, searchQuery);
@@ -490,6 +513,8 @@ export default function HomeScreen() {
   const handleSearch = (query: string) => {
     setSearch(query);
     setCurrentPage(1);
+    setLoadingMore(false);
+    loadMoreGuardRef.current = false;
     applyFilters(reduxBarangs, selectedGudang, query);
   };
 
@@ -599,7 +624,7 @@ export default function HomeScreen() {
                 theme={{ isDark, cardBg, textColor }}
               />
             )}
-            keyExtractor={item => item.kd_br}
+            keyExtractor={(item, index) => `${getBarangIdentityKey(item)}-${index}`}
             numColumns={barangColumns}
             scrollEnabled={true}
             columnWrapperStyle={styles.barangRow}
@@ -608,7 +633,7 @@ export default function HomeScreen() {
             windowSize={7}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={Platform.OS === 'android'}
-            onEndReached={handleLoadMore}
+            onEndReached={search.trim() ? undefined : handleLoadMore}
             onEndReachedThreshold={0.3}
             refreshControl={
               <RefreshControl
@@ -620,7 +645,7 @@ export default function HomeScreen() {
               />
             }
             ListFooterComponent={
-              loadingMore ? (
+              loadingMore && !search.trim() ? (
                 <View style={styles.footerLoader}>
                   <ActivityIndicator size="small" color="#0066FF" />
                   <Text style={styles.footerText}>Loading more...</Text>
