@@ -27,6 +27,7 @@ export default function RegisterScreen() {
   const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   const [name, setName] = useState('');
+  const [kdCus, setKdCus] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
@@ -62,6 +63,10 @@ export default function RegisterScreen() {
       Alert.alert('Validasi', 'Nama wajib diisi.');
       return;
     }
+    if (!kdCus.trim()) {
+      Alert.alert('Validasi', 'Kode pelanggan (kd_cus) wajib diisi.');
+      return;
+    }
     if (!email.trim()) {
       Alert.alert('Validasi', 'Email wajib diisi.');
       return;
@@ -92,6 +97,7 @@ export default function RegisterScreen() {
           email: email.trim(),
           password,
           password_confirmation: passwordConfirmation,
+          kd_cus: kdCus.trim(),
         })
       ).unwrap();
 
@@ -141,6 +147,28 @@ export default function RegisterScreen() {
                   onChangeText={setName}
                   editable={!loading}
                   autoCapitalize="words"
+                />
+              </View>
+
+              {/* Kode Pelanggan */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: textColor }]}>Kode Pelanggan</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: inputBorder,
+                      color: textColor,
+                    },
+                  ]}
+                  placeholder="Masukkan kode pelanggan (kd_cus)"
+                  placeholderTextColor={secondaryText}
+                  value={kdCus}
+                  onChangeText={setKdCus}
+                  editable={!loading}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </View>
 

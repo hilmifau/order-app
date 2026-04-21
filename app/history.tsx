@@ -10,6 +10,7 @@ import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Alert,
   Modal,
   Platform,
@@ -266,27 +267,34 @@ export default function HistoryScreen() {
               </View>
             ) : (
               <>
-                <ScrollView style={styles.modalScroll}>
-                  {selectedOrder && (
-                    <View style={[styles.modalOrderInfo, { backgroundColor: cardBg }]}>
-                      <View style={styles.infoRow}>
-                        <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>No. Transaksi:</Text>
-                        <Text style={[styles.infoValue, { color: textColor }]}>#{selectedOrder.no_tran || selectedOrder.id}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Tanggal:</Text>
-                        <Text style={[styles.infoValue, { color: textColor }]}>
-                          {formatDateDdMmYyyy(selectedOrder.tgl)}
-                          {selectedOrder.jam ? ` · ${selectedOrder.jam}` : ''}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  <Text style={[styles.detailSectionTitle, { color: secondaryTextColor }]}>DAFTAR BARANG</Text>
-                  
-                  {orderDetails.map((item, idx) => (
-                    <View key={`detail-${idx}`} style={[styles.detailItem, { borderBottomColor: borderColor }]}>
+                <FlatList
+                  style={styles.modalScroll}
+                  data={orderDetails}
+                  keyExtractor={(item, idx) => `${item.KD_BR || 'item'}-${idx}`}
+                  contentContainerStyle={styles.modalScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  ListHeaderComponent={
+                    <>
+                      {selectedOrder && (
+                        <View style={[styles.modalOrderInfo, { backgroundColor: cardBg }]}>
+                          <View style={styles.infoRow}>
+                            <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>No. Transaksi:</Text>
+                            <Text style={[styles.infoValue, { color: textColor }]}>#{selectedOrder.no_tran || selectedOrder.id}</Text>
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Tanggal:</Text>
+                            <Text style={[styles.infoValue, { color: textColor }]}>
+                              {formatDateDdMmYyyy(selectedOrder.tgl)}
+                              {selectedOrder.jam ? ` · ${selectedOrder.jam}` : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      <Text style={[styles.detailSectionTitle, { color: secondaryTextColor }]}>DAFTAR BARANG</Text>
+                    </>
+                  }
+                  renderItem={({ item }) => (
+                    <View style={[styles.detailItem, { borderBottomColor: borderColor }]}>
                       <View style={styles.detailItemTop}>
                         <Text style={[styles.detailItemName, { color: textColor }]}>{item.nama_br}</Text>
                         <Text style={[styles.detailItemSubtotal, { color: textColor }]}>
@@ -300,9 +308,13 @@ export default function HistoryScreen() {
                         <Text style={[styles.detailItemText, { color: accentColor }]}>Kode: {item.KD_BR}</Text>
                       </View>
                     </View>
-                  ))}
-                  <View style={{ height: 20 }} />
-                </ScrollView>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={[styles.detailItemText, { color: secondaryTextColor }]}>
+                      Tidak ada detail barang.
+                    </Text>
+                  }
+                />
 
                 <View style={[styles.modalFooter, { borderTopColor: borderColor, backgroundColor: cardBg }]}>
                   <Text style={[styles.totalLabel, { color: textColor }]}>Total Akhir</Text>
@@ -327,10 +339,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 45,
+    paddingTop: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    height: 90,
+    height: 50,
   },
   backButton: {
     padding: 8,
@@ -410,21 +422,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   historyTotalAmount: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#FF9800',
   },
   printPdfBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     borderRadius: 10,
     elevation: 2,
   },
   printPdfBtnText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
   },
   emptyContainer: {
@@ -466,7 +478,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   detailBtnText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
   },
   modalOverlay: {
@@ -502,6 +514,9 @@ const styles = StyleSheet.create({
   modalScroll: {
     flex: 1,
     padding: 20,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
   },
   modalOrderInfo: {
     padding: 16,

@@ -1,6 +1,18 @@
 import axiosInstance from './axiosInstance';
 import { getAuthToken } from './storageService';
 
+/** Nilai `Barang.ket` untuk keterangan harga (bandingkan backend; bandingkan UI case-insensitive). */
+export const BARANG_KET_HARGA = ['NAIK', 'TURUN', 'SAMA', 'BARU'] as const;
+export type BarangKetHarga = (typeof BARANG_KET_HARGA)[number];
+
+export function normalizeBarangKetHarga(raw: string | null | undefined): BarangKetHarga | null {
+  const u = (raw || '').trim().toUpperCase();
+  if (u === 'NAIK' || u === 'TURUN' || u === 'SAMA' || u === 'BARU') {
+    return u as BarangKetHarga;
+  }
+  return null;
+}
+
 export interface Barang {
   kd_br: string;
   nama: string;
@@ -34,6 +46,7 @@ export interface Barang {
   qty_br: string | null;
   status_hadiah: string | null;
   sistem_hadiah: string | null;
+  /** Keterangan harga: NAIK | TURUN | SAMA | BARU (lihat `BarangKetHarga`). */
   ket: string;
   Barcode: string;
   gambar?: string;

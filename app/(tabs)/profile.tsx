@@ -1,7 +1,7 @@
 import { useTheme } from '@/hooks/use-theme';
-import { formatDateDdMmYyyy } from '@/utils/dateDisplay';
 import { fetchCurrentUserAsync, logoutAsync, User } from '@/store/authSlice';
 import { AppDispatch, RootState } from '@/store/store';
+import { formatDateDdMmYyyy } from '@/utils/dateDisplay';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -78,7 +78,7 @@ export default function ProfileScreen() {
         {/* Profile Header Card */}
         <View style={[styles.profileHeaderCard, { backgroundColor: cardBg }]}>
           <View style={[styles.avatarContainer, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}>
-            <Text style={styles.avatarText}>{displayProfile?.name?.charAt(0) || '👤'}</Text>
+            <Text style={styles.avatarEmoji}>👤</Text>
           </View>
           <View style={styles.profileHeaderInfo}>
             <Text style={[styles.profileName, { color: textColor }]}>{displayProfile?.name || 'User'}</Text>
@@ -211,12 +211,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    height: 60,
+    height: 40,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -242,10 +242,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFD700',
   },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFD700',
+  avatarEmoji: {
+    fontSize: 26,
+    lineHeight: 30,
   },
   profileHeaderInfo: {
     flex: 1,

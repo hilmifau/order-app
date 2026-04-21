@@ -479,11 +479,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
     backgroundColor: '#242424',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
-    height: 60,
+    height: 40,
   },
   backButton: {
     width: 40,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',

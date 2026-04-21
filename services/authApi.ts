@@ -12,6 +12,7 @@ export interface RegisterCredentials {
   email: string;
   password: string;
   password_confirmation: string;
+  kd_cus: string;
 }
 
 export interface AuthResponse {

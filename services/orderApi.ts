@@ -101,19 +101,33 @@ export const getOrdersByCustomer = async (kd_cus: string): Promise<any[]> => {
 export const getOrderDetails = async (no_tran: string | number): Promise<any[]> => {
   try {
     const token = await getAuthToken();
-    // Berdasarkan API_COLLECTION.md, kita gunakan /detail-po-plg
-    // Kita fetch semua detail dan filter berdasarkan no_tran
-    const response = await axiosInstance.get(`/detail-po-plg?per_page=100`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    
-    if (response.data && response.data.data) {
-      return response.data.data.filter((d: any) => String(d.no_tran) === String(no_tran));
-    }
-    
-    return [];
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const targetNoTran = String(no_tran);
+    const matchedDetails: any[] = [];
+
+    // Endpoint detail-po-plg bersifat paginated, jadi ambil semua halaman
+    // agar detail transaksi tidak hilang saat data total > 100.
+    let page = 1;
+    let lastPage = 1;
+
+    do {
+      const response = await axiosInstance.get(`/detail-po-plg?per_page=100&page=${page}`, {
+        headers,
+      });
+
+      const pageData = Array.isArray(response.data?.data) ? response.data.data : [];
+      const pageMatches = pageData.filter((d: any) => String(d.no_tran) === targetNoTran);
+      matchedDetails.push(...pageMatches);
+
+      const apiLastPage = Number(response.data?.last_page || 1);
+      lastPage = Number.isFinite(apiLastPage) && apiLastPage > 0 ? apiLastPage : 1;
+      page += 1;
+    } while (page <= lastPage);
+
+    return matchedDetails;
   } catch (error) {
     console.error('Error fetching order details:', error);
     throw error;
