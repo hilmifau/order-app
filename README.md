@@ -69,17 +69,6 @@ constants/              # App constants
 hooks/                  # Custom hooks
 ```
 
-## 🔐 Login (Mock)
-
-**Test credentials:**
-
-| UserID | Password | Kode Pelanggan |
-|--------|----------|----------------|
-| user1  | pass123  | CUST001        |
-| admin  | admin123 | CUST002        |
-
-> **Note:** Saat ini menggunakan mock login. Akan otomatis switch ke real API ketika endpoint `/pengguna` siap (uncomment di `services/authApi.ts`)
-
 ## 🔄 API Integration
 
 - **Base URL:** `http://45.112.125.75:8080/public/api`
@@ -87,13 +76,6 @@ hooks/                  # Custom hooks
 - **Categories:** `GET /jenis-produk`
 - **Login:** `POST /pengguna` (akan di-implement)
 
-## 📝 Environment Variables
-
-Buat `.env` file:
-
-```
-EXPO_PUBLIC_API_BASE_URL=http://45.112.125.75:8080/public/api
-```
 
 ## 📸 Screenshots
 
@@ -134,4 +116,4 @@ Private
 
 ## 👤 Author
 
-Order App Team
+Hilmi fauzi

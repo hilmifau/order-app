@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { getAuthToken } from './storageService';
 
 // Konfigurasi base URL - sesuaikan dengan API server Anda
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://45.112.125.75:8080/public/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://103.125.42.217:8080/public/api';
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
