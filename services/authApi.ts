@@ -1,4 +1,5 @@
 
+import Config from '@/constants/Config';
 import axiosInstance from './axiosInstance';
 import { getAuthToken } from './storageService';
 
@@ -33,6 +34,25 @@ export interface AuthResponse {
 }
 
 export const loginApi = async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  // Bypass sementara saat backend down: aktifkan via EXPO_PUBLIC_USE_MOCK_DATA=true di .env
+  if (Config.USE_MOCK_DATA) {
+    return {
+      success: true,
+      token: 'mock-token-bypass',
+      user: {
+        id: 'mock-1',
+        kd_cus: 'CUS001',
+        username: 'Demo User',
+        name: 'Demo User',
+        storeName: 'Demo Store',
+        address: 'Jl. Demo No. 1',
+        phone: '081234567890',
+        email: credentials.email || 'demo@example.com',
+        memberSince: new Date().toISOString(),
+      },
+    };
+  }
+
   try {
     const payload = {
       email: credentials.email,

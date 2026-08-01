@@ -1,6 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
 import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
-import { addToCart, clearCart, removeFromCart, updateQuantity } from '@/store/cartSlice';
+import { addToCart, clearCart, removeFromCart, updateQuantity, updateVariant } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { formatDateDdMmYyyy, formatDateLabelWithWeekday, formatNowDdMmYyyy, formatTime24h } from '@/utils/dateDisplay';
 import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
@@ -100,6 +100,20 @@ export default function ExploreScreen() {
             <Text style={[styles.cartItemCode, { color: isDark ? '#FFD700' : '#FF9800' }]}>
               Kode: {item.barang.kd_br}
             </Text>
+            <TextInput
+              style={[
+                styles.variantInput,
+                {
+                  color: textColor,
+                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
+                  borderColor: isDark ? '#444' : '#ddd',
+                },
+              ]}
+              value={item.variant || ''}
+              onChangeText={(text) => dispatch(updateVariant({ kd_br: item.kd_br, variant: text }))}
+              placeholder="Varian Rasa"
+              placeholderTextColor={secondaryTextColor}
+            />
           </View>
         </View>
 
@@ -221,7 +235,7 @@ export default function ExploreScreen() {
           NO_PO: finalNoTran,
           NO_URUT: urut.toString(),
           KD_BR: item.barang.kd_br,
-          RASA: item.barang.ket || item.barang.jenis_produk || '',
+          RASA: item.variant || item.barang.ket || item.barang.jenis_produk || '',
           QTY: item.quantity,
           SAT: item.barang.satuan,
           harga: price,
@@ -548,6 +562,14 @@ const styles = StyleSheet.create({
   cartItemCode: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  variantInput: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    fontSize: 12,
   },
   divider: {
     height: 1,

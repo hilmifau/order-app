@@ -5,6 +5,7 @@ export interface CartItem {
   kd_br: string;
   quantity: number;
   barang: Barang; // Store full barang data for display
+  variant?: string;
 }
 
 interface CartState {
@@ -48,6 +49,14 @@ const cartSlice = createSlice({
         }
       }
     },
+    updateVariant: (state, action: PayloadAction<{ kd_br: string; variant: string }>) => {
+      const { kd_br, variant } = action.payload;
+      const item = state.items.find(item => item.kd_br === kd_br);
+
+      if (item) {
+        item.variant = variant;
+      }
+    },
     clearCart: (state) => {
       state.items = [];
     },
@@ -61,6 +70,7 @@ export const {
   addToCart,
   removeFromCart,
   updateQuantity,
+  updateVariant,
   clearCart,
   loadCartFromStorage,
 } = cartSlice.actions;
