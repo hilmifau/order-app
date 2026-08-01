@@ -1,5 +1,6 @@
 
 import Config from '@/constants/Config';
+import { getFriendlyErrorMessage } from '@/utils/apiError';
 import axiosInstance from './axiosInstance';
 import { getAuthToken } from './storageService';
 
@@ -89,18 +90,18 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
       message: response.data?.message || 'Login gagal',
     };
   } catch (error: any) {
-    let errorMessage = 'Login error';
+    // Log detail teknis untuk debugging, tapi tampilkan pesan ramah ke user
+    console.error('Login API error:', error?.response?.status, error?.response?.data || error?.message);
 
-    // Coba ambil error message dari response API
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.error) {
-      errorMessage = error.response.data.error;
-    } else if (error.response?.statusText) {
-      errorMessage = error.response.statusText;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+    const wrongCredentials = 'Email atau password salah. Periksa kembali data login Anda.';
+    const errorMessage = getFriendlyErrorMessage(error, {
+      fallback: 'Login gagal. Silakan coba lagi.',
+      overrides: {
+        400: wrongCredentials,
+        401: wrongCredentials,
+        422: wrongCredentials,
+      },
+    });
 
     return {
       success: false,
@@ -140,18 +141,28 @@ export const registerApi = async (credentials: RegisterCredentials): Promise<Aut
       message: response.data?.message || 'Registrasi gagal',
     };
   } catch (error: any) {
-    let errorMessage = 'Registrasi error';
+    // Log detail teknis untuk debugging, tapi tampilkan pesan ramah ke user
+    console.error('Register API error:', error?.response?.status, error?.response?.data || error?.message);
 
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.errors) {
-      // Handle Laravel validation errors
-      const errors = error.response.data.errors;
-      const firstError = Object.values(errors)[0] as string[];
-      errorMessage = firstError[0] || 'Registrasi gagal';
-    } else if (error.message) {
-      errorMessage = error.message;
+    // Deteksi kasus validasi yang umum agar pesannya lebih spesifik
+    let validationMessage = 'Data registrasi tidak valid. Periksa kembali isian Anda.';
+    const validationErrors = error?.response?.data?.errors;
+    if (validationErrors && typeof validationErrors === 'object') {
+      const allMessages = Object.values(validationErrors).flat().join(' ').toLowerCase();
+      if (allMessages.includes('taken')) {
+        validationMessage = 'Email sudah terdaftar. Gunakan email lain atau silakan login.';
+      } else if (allMessages.includes('confirmation')) {
+        validationMessage = 'Password dan Konfirmasi Password tidak cocok.';
+      }
     }
+
+    const errorMessage = getFriendlyErrorMessage(error, {
+      fallback: 'Registrasi gagal. Silakan coba lagi.',
+      overrides: {
+        400: validationMessage,
+        422: validationMessage,
+      },
+    });
 
     return {
       success: false,
@@ -212,7 +223,11 @@ export const getCurrentUserApi = async (): Promise<{ success: boolean; user: any
     return { success: false, user: null as any, message: 'Data user tidak ditemukan' };
   } catch (error: any) {
     console.error('Error fetching current user:', error?.response?.status, error?.response?.data || error.message);
-    return { success: false, user: null as any, message: error.message };
+    return {
+      success: false,
+      user: null as any,
+      message: getFriendlyErrorMessage(error, { fallback: 'Gagal mengambil data profil. Silakan coba lagi.' }),
+    };
   }
 };
 // Logout user

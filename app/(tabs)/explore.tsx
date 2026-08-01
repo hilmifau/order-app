@@ -1,14 +1,143 @@
 import { useTheme } from '@/hooks/use-theme';
 import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
-import { addToCart, clearCart, removeFromCart, updateQuantity, updateVariant } from '@/store/cartSlice';
+import { addToCart, CartItem, clearCart, removeFromCart, updateQuantity, updateVariant } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { getFriendlyErrorMessage } from '@/utils/apiError';
 import { formatDateDdMmYyyy, formatDateLabelWithWeekday, formatNowDdMmYyyy, formatTime24h } from '@/utils/dateDisplay';
 import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+type CartItemRowProps = {
+  item: CartItem;
+  isDark: boolean;
+  cardBg: string;
+  textColor: string;
+  secondaryTextColor: string;
+};
+
+// Didefinisikan di luar ExploreScreen agar identitas komponen stabil antar render;
+// jika di dalam, setiap render membuat komponen baru sehingga TextInput di-remount
+// dan keyboard kehilangan fokus setiap kali mengetik.
+const CartItemRow = ({ item, isDark, cardBg, textColor, secondaryTextColor }: CartItemRowProps) => {
+  const dispatch = useAppDispatch();
+  const price = parseFloat(item.barang.h_anggota) || 0;
+  const itemTotal = price * item.quantity;
+  const [inputValue, setInputValue] = useState(item.quantity.toString());
+
+  useEffect(() => {
+    setInputValue(item.quantity.toString());
+  }, [item.quantity]);
+
+  const handleUpdateQuantity = (kd_br: string, quantity: number) => {
+    if (quantity <= 0) {
+      dispatch(removeFromCart(kd_br));
+    } else {
+      dispatch(updateQuantity({ kd_br, quantity }));
+    }
+  };
+
+  const handleQuantityChange = (text: string) => {
+    setInputValue(text);
+    const num = parseInt(text);
+    if (!isNaN(num) && num >= 0) {
+      handleUpdateQuantity(item.kd_br, num);
+    }
+  };
+
+  const handleBlur = () => {
+    const num = parseInt(inputValue);
+    if (isNaN(num) || num < 0) {
+      setInputValue('1');
+      handleUpdateQuantity(item.kd_br, 1);
+    } else if (num === 0) {
+      dispatch(removeFromCart(item.kd_br));
+    }
+  };
+
+  return (
+    <View style={[styles.cartItemCard, { backgroundColor: cardBg }]}>
+      {/* Top Section: Icon and Name/Code */}
+      <View style={styles.cartItemTop}>
+        <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}>
+          <Text style={styles.cartItemIcon}>📦</Text>
+        </View>
+        <View style={styles.cartItemInfo}>
+          <Text style={[styles.cartItemName, { color: textColor }]} numberOfLines={2}>
+            {item.barang.nama}
+          </Text>
+          <Text style={[styles.cartItemCode, { color: isDark ? '#FFD700' : '#FF9800' }]}>
+            Kode: {item.barang.kd_br}
+          </Text>
+          <TextInput
+            style={[
+              styles.variantInput,
+              {
+                color: textColor,
+                backgroundColor: isDark ? '#1a1a1a' : '#fff',
+                borderColor: isDark ? '#444' : '#ddd',
+              },
+            ]}
+            value={item.variant || ''}
+            onChangeText={(text) => dispatch(updateVariant({ kd_br: item.kd_br, variant: text }))}
+            placeholder="Varian Rasa"
+            placeholderTextColor={secondaryTextColor}
+          />
+        </View>
+      </View>
+
+      {/* Divider */}
+      <View style={[styles.divider, { backgroundColor: isDark ? '#333' : '#eee' }]} />
+
+      {/* Bottom Section: Price, Quantity, and Subtotal */}
+      <View style={styles.cartItemBottom}>
+        <View style={styles.priceContainer}>
+          <Text style={[styles.priceLabel, { color: secondaryTextColor }]}>Harga Satuan</Text>
+          <Text style={[styles.cartItemPrice, { color: textColor }]}>
+            Rp {price.toLocaleString('id-ID')}
+          </Text>
+        </View>
+
+        <View style={styles.controlsContainer}>
+          <View style={[styles.quantityControl, { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor: isDark ? '#444' : '#ddd' }]}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => handleUpdateQuantity(item.kd_br, item.quantity - 1)}
+            >
+              <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>−</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              style={[styles.quantityInput, { color: textColor }]}
+              value={inputValue}
+              onChangeText={handleQuantityChange}
+              onBlur={handleBlur}
+              keyboardType="numeric"
+              selectTextOnFocus
+            />
+
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => handleUpdateQuantity(item.kd_br, item.quantity + 1)}
+            >
+              <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.totalContainer}>
+            <Text style={[styles.totalLabelSmall, { color: secondaryTextColor }]}>Subtotal</Text>
+            <Text style={[styles.cartItemTotal, { color: textColor }]}>
+              Rp {itemTotal.toLocaleString('id-ID')}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 export default function ExploreScreen() {
   const dispatch = useAppDispatch();
@@ -53,118 +182,6 @@ export default function ExploreScreen() {
       const price = parseFloat(item.barang.h_anggota) || 0;
       return total + price * item.quantity;
     }, 0);
-  };
-
-  const handleUpdateQuantity = (kd_br: string, quantity: number) => {
-    if (quantity <= 0) {
-      dispatch(removeFromCart(kd_br));
-    } else {
-      dispatch(updateQuantity({ kd_br, quantity }));
-    }
-  };
-
-  const CartItemRow = ({ item }: { item: typeof cartItems[0] }) => {
-    const price = parseFloat(item.barang.h_anggota) || 0;
-    const itemTotal = price * item.quantity;
-    const [inputValue, setInputValue] = useState(item.quantity.toString());
-
-    const handleQuantityChange = (text: string) => {
-      setInputValue(text);
-      const num = parseInt(text);
-      if (!isNaN(num) && num >= 0) {
-        handleUpdateQuantity(item.kd_br, num);
-      }
-    };
-
-    const handleBlur = () => {
-      const num = parseInt(inputValue);
-      if (isNaN(num) || num < 0) {
-        setInputValue('1');
-        handleUpdateQuantity(item.kd_br, 1);
-      } else if (num === 0) {
-        dispatch(removeFromCart(item.kd_br));
-      }
-    };
-
-    return (
-      <View style={[styles.cartItemCard, { backgroundColor: cardBg }]}>
-        {/* Top Section: Icon and Name/Code */}
-        <View style={styles.cartItemTop}>
-          <View style={[styles.iconContainer, { backgroundColor: isDark ? '#333' : '#e5e5e5' }]}>
-            <Text style={styles.cartItemIcon}>📦</Text>
-          </View>
-          <View style={styles.cartItemInfo}>
-            <Text style={[styles.cartItemName, { color: textColor }]} numberOfLines={2}>
-              {item.barang.nama}
-            </Text>
-            <Text style={[styles.cartItemCode, { color: isDark ? '#FFD700' : '#FF9800' }]}>
-              Kode: {item.barang.kd_br}
-            </Text>
-            <TextInput
-              style={[
-                styles.variantInput,
-                {
-                  color: textColor,
-                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                  borderColor: isDark ? '#444' : '#ddd',
-                },
-              ]}
-              value={item.variant || ''}
-              onChangeText={(text) => dispatch(updateVariant({ kd_br: item.kd_br, variant: text }))}
-              placeholder="Varian Rasa"
-              placeholderTextColor={secondaryTextColor}
-            />
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={[styles.divider, { backgroundColor: isDark ? '#333' : '#eee' }]} />
-
-        {/* Bottom Section: Price, Quantity, and Subtotal */}
-        <View style={styles.cartItemBottom}>
-          <View style={styles.priceContainer}>
-            <Text style={[styles.priceLabel, { color: secondaryTextColor }]}>Harga Satuan</Text>
-            <Text style={[styles.cartItemPrice, { color: textColor }]}>
-              Rp {price.toLocaleString('id-ID')}
-            </Text>
-          </View>
-
-          <View style={styles.controlsContainer}>
-            <View style={[styles.quantityControl, { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor: isDark ? '#444' : '#ddd' }]}>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => handleUpdateQuantity(item.kd_br, item.quantity - 1)}
-              >
-                <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>−</Text>
-              </TouchableOpacity>
-
-              <TextInput
-                style={[styles.quantityInput, { color: textColor }]}
-                value={inputValue}
-                onChangeText={handleQuantityChange}
-                onBlur={handleBlur}
-                keyboardType="numeric"
-                selectTextOnFocus
-              />
-
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => handleUpdateQuantity(item.kd_br, item.quantity + 1)}
-              >
-                <Text style={[styles.quantityButtonText, { color: isDark ? '#FFD700' : '#FF9800' }]}>+</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.totalContainer}>
-              <Text style={[styles.totalLabelSmall, { color: secondaryTextColor }]}>Subtotal</Text>
-              <Text style={[styles.cartItemTotal, { color: textColor }]}>
-                Rp {itemTotal.toLocaleString('id-ID')}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
   };
 
   const handleOrder = async () => {
@@ -253,7 +270,10 @@ export default function ExploreScreen() {
       Alert.alert('Order Berhasil', 'Order Anda telah dicatat. Anda sekarang bisa mencetak PDF.');
     } catch (error) {
       console.error('Order error:', error);
-      Alert.alert('Gagal Order', 'Terjadi kesalahan saat menyimpan order.');
+      Alert.alert(
+        'Gagal Order',
+        getFriendlyErrorMessage(error, { fallback: 'Terjadi kesalahan saat menyimpan order. Silakan coba lagi.' })
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -378,7 +398,15 @@ export default function ExploreScreen() {
             <View style={styles.cartItemsSection}>
               <FlatList
                 data={cartItems}
-                renderItem={({ item }) => <CartItemRow item={item} />}
+                renderItem={({ item }) => (
+                  <CartItemRow
+                    item={item}
+                    isDark={isDark}
+                    cardBg={cardBg}
+                    textColor={textColor}
+                    secondaryTextColor={secondaryTextColor}
+                  />
+                )}
                 keyExtractor={item => item.kd_br}
                 scrollEnabled={false}
               />

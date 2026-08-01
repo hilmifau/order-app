@@ -61,7 +61,7 @@ export default function LoginScreen() {
       setLoginStatus('Login berhasil.');
     } catch (err: any) {
       setLoginStatus('Login gagal.');
-      Alert.alert('Login Gagal', err);
+      Alert.alert('Login Gagal', typeof err === 'string' ? err : 'Login gagal. Silakan coba lagi.');
     }
   };
 

@@ -1,6 +1,7 @@
 import { useTheme } from '@/hooks/use-theme';
 import { getOrderDetails, getOrdersByCustomer } from '@/services/orderApi';
 import { RootState } from '@/store/store';
+import { getFriendlyErrorMessage } from '@/utils/apiError';
 import { formatDateDdMmYyyy, formatNowDdMmYyyy } from '@/utils/dateDisplay';
 import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,7 +67,10 @@ export default function HistoryScreen() {
       setOrders(sorted);
     } catch (error) {
       console.error('Failed to load history:', error);
-      Alert.alert('Error', 'Gagal memuat riwayat pesanan');
+      Alert.alert(
+        'Gagal Memuat Riwayat',
+        getFriendlyErrorMessage(error, { fallback: 'Gagal memuat riwayat pesanan. Silakan coba lagi.' })
+      );
     } finally {
       setIsLoadingOrders(false);
     }
@@ -83,7 +87,10 @@ export default function HistoryScreen() {
       setOrderDetails(details);
     } catch (error) {
       console.error('Failed to load order details:', error);
-      Alert.alert('Error', 'Gagal memuat detail pesanan');
+      Alert.alert(
+        'Gagal Memuat Detail',
+        getFriendlyErrorMessage(error, { fallback: 'Gagal memuat detail pesanan. Silakan coba lagi.' })
+      );
     } finally {
       setIsLoadingDetails(false);
     }
