@@ -39,6 +39,7 @@ const inventorySlice = createSlice({
     addMoreBarangs: (state, action: PayloadAction<Barang[]>) => {
       state.barangs = [...state.barangs, ...action.payload];
     },
+    resetInventory: () => initialState,
   },
 });
 
@@ -49,6 +50,7 @@ export const {
   setBarangs,
   setInitialized,
   addMoreBarangs,
+  resetInventory,
 } = inventorySlice.actions;
 
 export default inventorySlice.reducer;

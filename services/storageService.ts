@@ -5,13 +5,38 @@ const AUTH_TOKEN_KEY = 'auth_token';
 const USER_DATA_KEY = 'user_data';
 const FAVORITES_KEY = 'favorites_data';
 const CART_KEY = 'cart_data';
+const OPNAME_CART_KEY = 'opname_cart_data';
+const DEVICE_ID_KEY = 'device_id';
+
+const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
+/** Hindari baca SecureStore di setiap request Axios. */
+let memoryToken: string | null | undefined = undefined;
+
+export const getDeviceId = async (): Promise<string> => {
+  try {
+    const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (existing) {
+      return existing;
+    }
+    const created = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+    await AsyncStorage.setItem(DEVICE_ID_KEY, created);
+    return created;
+  } catch (error) {
+    console.error('Error getting device id:', error);
+    return `dev_fallback_${Date.now().toString(36)}`;
+  }
+};
 
 /**
  * Simpan authentication token ke SecureStore (Encrypted)
  */
 export const saveAuthToken = async (token: string): Promise<void> => {
   try {
-    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+    memoryToken = token;
+    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token, SECURE_STORE_OPTIONS);
   } catch (error) {
     console.error('Error saving auth token:', error);
     throw error;
@@ -23,8 +48,11 @@ export const saveAuthToken = async (token: string): Promise<void> => {
  */
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-    return token;
+    if (memoryToken !== undefined) {
+      return memoryToken;
+    }
+    memoryToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    return memoryToken;
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
@@ -36,6 +64,7 @@ export const getAuthToken = async (): Promise<string | null> => {
  */
 export const removeAuthToken = async (): Promise<void> => {
   try {
+    memoryToken = null;
     await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
   } catch (error) {
     console.error('Error removing auth token:', error);
@@ -128,12 +157,59 @@ export const getCart = async (): Promise<any[]> => {
   }
 };
 
+export const removeCart = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(CART_KEY);
+  } catch (error) {
+    console.error('Error removing cart:', error);
+  }
+};
+
+export const removeFavorites = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(FAVORITES_KEY);
+  } catch (error) {
+    console.error('Error removing favorites:', error);
+  }
+};
+
+export const saveOpnameCart = async (items: any[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(OPNAME_CART_KEY, JSON.stringify(items));
+  } catch (error) {
+    console.error('Error saving opname cart:', error);
+  }
+};
+
+export const getOpnameCart = async (): Promise<any[]> => {
+  try {
+    const data = await AsyncStorage.getItem(OPNAME_CART_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error getting opname cart:', error);
+    return [];
+  }
+};
+
+export const removeOpnameCart = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(OPNAME_CART_KEY);
+  } catch (error) {
+    console.error('Error removing opname cart:', error);
+  }
+};
+
 /**
- * Clear data autentikasi (untuk logout) - Data Favorit & Keranjang dipertahankan sesuai request
+ * Clear data autentikasi + cache keranjang/favorit lokal.
+ * Data di server tetap tersimpan per user.
  */
 export const clearAllStorage = async (): Promise<void> => {
   try {
+    memoryToken = null;
     await AsyncStorage.removeItem(USER_DATA_KEY);
+    await AsyncStorage.removeItem(CART_KEY);
+    await AsyncStorage.removeItem(FAVORITES_KEY);
+    await AsyncStorage.removeItem(OPNAME_CART_KEY);
     await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
   } catch (error) {
     console.error('Error clearing storage:', error);

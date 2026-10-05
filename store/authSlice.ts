@@ -1,6 +1,11 @@
-import { AuthResponse, getCurrentUserApi, loginApi, LoginCredentials, logoutApi, registerApi, RegisterCredentials, validateToken } from '@/services/authApi';
+import { AuthResponse, getCurrentUserApi, loginApi, LoginCredentials, logoutApi, registerApi, RegisterCredentials } from '@/services/authApi';
 import { clearAllStorage, getAuthToken, getUser, removeAuthToken, removeUser, saveAuthToken, saveUser } from '@/services/storageService';
+import { normalizeRole, type UserRole } from '@/utils/roles';
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { clearCart } from './cartSlice';
+import { clearFavorites } from './favoriteSlice';
+import { resetInventory } from './inventorySlice';
+import { clearOpnameCart } from './opnameCartSlice';
 
 export interface User {
   id: string;
@@ -12,6 +17,7 @@ export interface User {
   phone: string;
   email: string;
   memberSince: string;
+  role: UserRole;
 }
 
 export interface AuthState {
@@ -32,7 +38,6 @@ const initialState: AuthState = {
   isInitialized: false,
 };
 
-// Async thunk untuk login
 export const loginAsync = createAsyncThunk(
   'auth/login',
   async (credentials: LoginCredentials, { rejectWithValue }) => {
@@ -43,7 +48,6 @@ export const loginAsync = createAsyncThunk(
         return rejectWithValue(response.message || 'Login failed');
       }
 
-      // Save to persistent storage
       if (response.token) {
         await saveAuthToken(response.token);
       }
@@ -58,7 +62,6 @@ export const loginAsync = createAsyncThunk(
   }
 );
 
-// Async thunk untuk register
 export const registerAsync = createAsyncThunk(
   'auth/register',
   async (credentials: RegisterCredentials, { rejectWithValue }) => {
@@ -68,7 +71,6 @@ export const registerAsync = createAsyncThunk(
         return rejectWithValue(response.message || 'Registrasi gagal');
       }
 
-      // Save to persistent storage
       if (response.token) {
         await saveAuthToken(response.token);
       }
@@ -83,24 +85,22 @@ export const registerAsync = createAsyncThunk(
   }
 );
 
-// Async thunk untuk check token saat app start
 export const checkAuthAsync = createAsyncThunk(
   'auth/checkAuth',
   async (_, { rejectWithValue }) => {
     try {
       const token = await getAuthToken();
-      const user = await getUser();
+      const stored = await getUser();
+      const user = stored
+        ? { ...stored, role: normalizeRole(stored.role) }
+        : null;
 
       if (!token) {
         return rejectWithValue('No token found');
       }
 
-      const isValid = await validateToken(token);
-      if (!isValid) {
-        return rejectWithValue('Token invalid');
-      }
-
-      // Jika token valid, return token dan user yang direstore
+      // Sesi lokal tahan lama: token di SecureStore = tetap masuk.
+      // Jangan panggil API di sini — gagal jaringan / server jangan sampai logout.
       return { token, user };
     } catch (error: any) {
       return rejectWithValue(error.message || 'Token validation failed');
@@ -108,21 +108,16 @@ export const checkAuthAsync = createAsyncThunk(
   }
 );
 
-// Async thunk untuk mengambil data user saat ini
 export const fetchCurrentUserAsync = createAsyncThunk(
   'auth/fetchCurrentUser',
   async (_, { rejectWithValue }) => {
     try {
       const response = await getCurrentUserApi();
-      if (!response.success) {
+      if (!response.success || !response.user) {
         return rejectWithValue(response.message || 'Gagal mengambil data user');
       }
 
-      // Save data user yang baru diambil ke storage
-      if (response.user) {
-        await saveUser(response.user);
-      }
-
+      await saveUser(response.user);
       return response.user;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Terjadi kesalahan saat mengambil profil');
@@ -130,7 +125,6 @@ export const fetchCurrentUserAsync = createAsyncThunk(
   }
 );
 
-// Async thunk untuk logout
 export const logoutAsync = createAsyncThunk(
   'auth/logoutAsync',
   async (_, { dispatch }) => {
@@ -139,11 +133,13 @@ export const logoutAsync = createAsyncThunk(
     } catch (error) {
       console.error('Logout error ignored:', error);
     } finally {
-      // Selalu hapus data lokal meskipun API gagal
       await removeAuthToken();
       await removeUser();
-      // Bisa panggil clearAllStorage() untuk benar-benar bersih
       await clearAllStorage();
+      dispatch(clearCart());
+      dispatch(clearFavorites());
+      dispatch(clearOpnameCart());
+      dispatch(resetInventory());
       dispatch(logout());
     }
   }
@@ -164,7 +160,6 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // Handle loginAsync
     builder
       .addCase(loginAsync.pending, (state) => {
         state.loading = true;
@@ -184,7 +179,6 @@ const authSlice = createSlice({
         state.user = null;
       });
 
-    // Handle registerAsync
     builder
       .addCase(registerAsync.pending, (state) => {
         state.loading = true;
@@ -201,7 +195,6 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       });
 
-    // Handle checkAuthAsync
     builder
       .addCase(checkAuthAsync.pending, (state) => {
         state.loading = true;
@@ -221,18 +214,12 @@ const authSlice = createSlice({
         state.user = null;
       });
 
-    // Handle fetchCurrentUserAsync
     builder
-      .addCase(fetchCurrentUserAsync.pending, (state) => {
-        state.loading = true;
-      })
       .addCase(fetchCurrentUserAsync.fulfilled, (state, action: PayloadAction<User>) => {
-        state.loading = false;
         state.user = action.payload;
         state.isAuthenticated = true;
       })
       .addCase(fetchCurrentUserAsync.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.payload as string;
       })
       .addCase(logoutAsync.fulfilled, (state) => {

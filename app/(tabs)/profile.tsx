@@ -2,9 +2,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { fetchCurrentUserAsync, logoutAsync, User } from '@/store/authSlice';
 import { AppDispatch, RootState } from '@/store/store';
 import { formatDateDdMmYyyy } from '@/utils/dateDisplay';
-import { Ionicons } from '@expo/vector-icons';
+import { isAdmin, roleLabel } from '@/utils/roles';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -23,20 +23,17 @@ export default function ProfileScreen() {
   const borderColor = isDark ? '#333' : '#ddd';
   const accentColor = isDark ? '#FFD700' : '#FF9800';
   const dangerColor = isDark ? '#ff6b6b' : '#d32f2f';
-  const [isFetching, setIsFetching] = useState(false);
 
-  // Fetch user data if it's missing but we are supposedly authenticated
   useEffect(() => {
-    if (!user && !isFetching && isAuthenticated) {
-      setIsFetching(true);
-      dispatch(fetchCurrentUserAsync())
-        .unwrap()
-        .catch((err) => {
-          console.warn('--- Profil --- Failed to fetch user data:', err);
-        })
-        .finally(() => setIsFetching(false));
+    if (!isAuthenticated) {
+      return;
     }
-  }, [user, isFetching, isAuthenticated, dispatch]);
+    dispatch(fetchCurrentUserAsync())
+      .unwrap()
+      .catch((err) => {
+        console.warn('--- Profil --- Failed to fetch user data:', err);
+      });
+  }, [isAuthenticated, dispatch]);
 
   // Use user data dari Redux jika available, otherwise use empty object with User type
   const displayProfile: Partial<User> = user || {};
@@ -83,6 +80,9 @@ export default function ProfileScreen() {
           <View style={styles.profileHeaderInfo}>
             <Text style={[styles.profileName, { color: textColor }]}>{displayProfile?.name || 'User'}</Text>
             <Text style={[styles.storeName, { color: accentColor }]}>{displayProfile?.storeName || 'Toko Pelanggan'}</Text>
+            <View style={[styles.roleBadge, isAdmin(displayProfile) ? styles.roleBadgeAdmin : styles.roleBadgeCustomer]}>
+              <Text style={styles.roleBadgeText}>{roleLabel(displayProfile?.role)}</Text>
+            </View>
           </View>
         </View>
 
@@ -97,6 +97,16 @@ export default function ProfileScreen() {
                 <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Kode Pelanggan</Text>
               </View>
               <Text style={[styles.infoValue, { color: textColor }]}>{displayProfile?.kd_cus || '-'}</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: borderColor }]} />
+
+            {/* Role */}
+            <View style={styles.infoItem}>
+              <View style={styles.infoLabelContainer}>
+                <Text style={[styles.infoIcon]}>🛡️</Text>
+                <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>Role</Text>
+              </View>
+              <Text style={[styles.infoValue, { color: textColor }]}>{roleLabel(displayProfile?.role)}</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: borderColor }]} />
 
@@ -143,22 +153,17 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Action Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: textColor }]}>Aktivitas</Text>
-          <View style={[styles.actionList, { backgroundColor: cardBg }]}>
+        {isAdmin(displayProfile) ? (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Admin</Text>
             <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => router.push('/history')}
+              style={[styles.adminBtn, { backgroundColor: cardBg, borderColor: accentColor }]}
+              onPress={() => router.push('/users')}
             >
-              <View style={styles.actionInfo}>
-                <Ionicons name="receipt-outline" size={20} color={accentColor} style={styles.actionIcon} />
-                <Text style={[styles.actionLabel, { color: textColor }]}>Riwayat Pesanan</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={secondaryTextColor} />
+              <Text style={[styles.adminBtnText, { color: accentColor }]}>👥 Kelola Pengguna</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        ) : null}
 
         {/* Settings Section */}
         <View style={styles.section}>
@@ -259,6 +264,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     opacity: 0.8,
   },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  roleBadgeAdmin: {
+    backgroundColor: '#E3F2FD',
+  },
+  roleBadgeCustomer: {
+    backgroundColor: '#E8F5E9',
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#333',
+  },
+  adminBtn: {
+    marginHorizontal: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+  },
+  adminBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   section: {
     marginBottom: 16,
   },
@@ -336,29 +370,6 @@ const styles = StyleSheet.create({
   logoutBtnText: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  actionList: {
-    marginHorizontal: 10,
-    borderRadius: 12,
-    paddingVertical: 2,
-  },
-  actionItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  actionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    marginRight: 12,
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',

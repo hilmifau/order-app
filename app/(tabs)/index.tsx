@@ -2,6 +2,7 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   Gudang as ApiGudang,
   Barang,
+  getBarangImageUrl,
   getBarangsWithPagination,
   getGudangs,
   normalizeBarangKetHarga,
@@ -9,16 +10,17 @@ import {
 import { addToCart } from '@/store/cartSlice';
 import { toggleFavorite } from '@/store/favoriteSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { addMoreBarangs, setBarangs as setBarangsAction, setError, setGudangs as setGudangsAction, setInitialized, setLoading } from '@/store/inventorySlice';
+import { setBarangs as setBarangsAction, setError, setGudangs as setGudangsAction, setInitialized, setLoading } from '@/store/inventorySlice';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { Image } from 'expo-image';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
   FlatList,
-  Image,
   Modal,
   Platform,
   RefreshControl,
@@ -85,22 +87,12 @@ interface Gudang {
   colorIndex: number;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
-/** Ticker only needs a sample; rendering hundreds of items ×2 kills JS/UI thread. */
-const TICKER_MAX_ITEMS = 48;
+/** Ticker teks saja — gambar remote di sini memberatkan HP. */
+const TICKER_MAX_ITEMS = 12;
 
 const COOP_BANNER_BG = '#0d4530';
-
-function countBarangsPerGudangKd(barangList: Barang[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const barang of barangList) {
-    const kd = (barang.kd || '').trim();
-    if (!kd) continue;
-    map.set(kd, (map.get(kd) || 0) + 1);
-  }
-  return map;
-}
 
 function getBarangIdentityKey(barang: Barang): string {
   const kdBr = (barang.kd_br || '').trim();
@@ -138,11 +130,6 @@ const TickerItem = React.memo(function TickerItem({
   const ket = (barang.ket || '-').trim();
   return (
     <View style={styles.tickerItem}>
-      <Image
-        source={barang.gambar ? { uri: barang.gambar } : PLACEHOLDER_IMAGE}
-        style={styles.tickerThumb}
-        resizeMode="cover"
-      />
       <Text style={[styles.tickerName, { color: textMain }]} numberOfLines={1}>
         {barang.nama}
       </Text>
@@ -160,10 +147,12 @@ function BarangRunningTicker({
   barangs,
   isDark,
   emptyMessage,
+  active,
 }: {
   barangs: Barang[];
   isDark: boolean;
   emptyMessage?: string;
+  active: boolean;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const [segmentWidth, setSegmentWidth] = useState(0);
@@ -172,9 +161,11 @@ function BarangRunningTicker({
   const accent = isDark ? '#FFD700' : '#FF9800';
 
   useEffect(() => {
-    if (segmentWidth <= 0) return;
+    if (!active || segmentWidth <= 0) {
+      translateX.stopAnimation();
+      return;
+    }
     translateX.setValue(0);
-    // Lebih lambat agar teks sempat dibaca (ms naik dengan lebar konten).
     const duration = Math.min(100_000, Math.max(55_000, segmentWidth * 95));
     const loop = Animated.loop(
       Animated.timing(translateX, {
@@ -186,7 +177,7 @@ function BarangRunningTicker({
     );
     loop.start();
     return () => loop.stop();
-  }, [segmentWidth, barangs, translateX]);
+  }, [segmentWidth, barangs, translateX, active]);
 
   if (barangs.length === 0) {
     return (
@@ -249,7 +240,7 @@ function BarangRunningTicker({
   );
 }
 
-function TopBannerBlock({ isDark, barangs }: { isDark: boolean; barangs: Barang[] }) {
+function TopBannerBlock({ isDark, barangs, active }: { isDark: boolean; barangs: Barang[]; active: boolean }) {
   const tickerBarangs = useMemo(() => {
     const hargaBaru = barangs.filter((b) => normalizeBarangKetHarga(b.ket) === 'BARU');
     return hargaBaru.length <= TICKER_MAX_ITEMS ? hargaBaru : hargaBaru.slice(0, TICKER_MAX_ITEMS);
@@ -272,13 +263,14 @@ function TopBannerBlock({ isDark, barangs }: { isDark: boolean; barangs: Barang[
           KOPERASI NIAGA ABADI RIDHOTULLAH
         </Text>
       </View>
-      <BarangRunningTicker barangs={tickerBarangs} isDark={isDark} emptyMessage={tickerEmptyMessage} />
+      <BarangRunningTicker barangs={tickerBarangs} isDark={isDark} emptyMessage={tickerEmptyMessage} active={active} />
     </View>
   );
 }
 
 export default function HomeScreen() {
   const dispatch = useAppDispatch();
+  const isFocused = useIsFocused();
   const { colorScheme } = useTheme();
   const { gudangs: reduxGudangs, barangs: reduxBarangs, loading: reduxLoading, error: reduxError, isInitialized } = useAppSelector(state => state.inventory);
   const { isAuthenticated } = useAppSelector(state => state.auth);
@@ -286,11 +278,11 @@ export default function HomeScreen() {
   const favoriteItems = useAppSelector(state => state.favorites?.items || []);
   const [gudangs, setGudangs] = useState<Gudang[]>([]);
   const [selectedGudang, setSelectedGudang] = useState<string | null>(null);
-  const [filteredBarangs, setFilteredBarangs] = useState<Barang[]>([]);
   const [displayedBarangs, setDisplayedBarangs] = useState<Barang[]>([]);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showGudangModal, setShowGudangModal] = useState(false);
   const [showQtyModal, setShowQtyModal] = useState(false);
@@ -298,6 +290,7 @@ export default function HomeScreen() {
   const [cartQtyInput, setCartQtyInput] = useState('1');
   const [refreshing, setRefreshing] = useState(false);
   const loadMoreGuardRef = useRef(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Responsive layout
   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
@@ -331,13 +324,19 @@ export default function HomeScreen() {
     } else {
       // Use data from Redux — reconstruct local gudangs if empty
       if (gudangs.length === 0 && reduxGudangs.length > 0) {
-        processGudangs(reduxGudangs, reduxBarangs);
-      } else {
-        updateGudangCounts(reduxBarangs);
+        processGudangs(reduxGudangs);
       }
-      applyFilters(reduxBarangs, selectedGudang, search);
+      setDisplayedBarangs(dedupeBarangs(reduxBarangs));
     }
   }, [isInitialized, isAuthenticated]);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadGudangsAndData = async () => {
     try {
@@ -353,20 +352,22 @@ export default function HomeScreen() {
       dispatch(setBarangsAction(result.data));
 
       // Process gudangs with barang data
-      processGudangs(gudangList, result.data);
-      applyFilters(result.data, null, '');
+      processGudangs(gudangList);
+      setDisplayedBarangs(dedupeBarangs(result.data));
 
       setCurrentPage(1);
       setTotalPages(result.totalPages);
+      setTotalItems(result.total);
       dispatch(setInitialized(true));
     } catch (err) {
       console.error('Error loading gudangs:', err);
       dispatch(setError('Failed to load warehouse data. Using default data.'));
-      processGudangs(DEFAULT_GUDANGS, DEFAULT_BARANGS);
+      processGudangs(DEFAULT_GUDANGS);
       dispatch(setBarangsAction(DEFAULT_BARANGS));
-      applyFilters(DEFAULT_BARANGS, null, '');
+      setDisplayedBarangs(DEFAULT_BARANGS);
       setCurrentPage(1);
       setTotalPages(1);
+      setTotalItems(DEFAULT_BARANGS.length);
       dispatch(setInitialized(true));
     } finally {
       dispatch(setLoading(false));
@@ -382,15 +383,13 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const processGudangs = (gudangList: ApiGudang[], barangList: Barang[] = []) => {
-    const counts = countBarangsPerGudangKd(barangList);
+  const processGudangs = (gudangList: ApiGudang[]) => {
     const gudangArray = gudangList
       .map((item, index) => {
-        const gudangKd = (item.kd || '').trim();
         return {
           kd: item.kd,
           name: item.nama || item.kd || 'Undefined',
-          count: counts.get(gudangKd) || 0,
+          count: Number(item.barang_count ?? 0),
           colorIndex: index,
         };
       })
@@ -407,88 +406,49 @@ export default function HomeScreen() {
     return colors[colorIndex % colors.length];
   };
 
-  const updateGudangCounts = (barangList: Barang[]) => {
-    const counts = countBarangsPerGudangKd(barangList);
-    setGudangs(prevGudangs => {
-      if (prevGudangs.length === 0) return prevGudangs;
-
-      return prevGudangs.map(gudang => {
-        const gudangKd = (gudang.kd || '').trim();
-        return {
-          ...gudang,
-          count: counts.get(gudangKd) || 0,
-        };
-      });
-    });
-  };
-
-  const applyFilters = (barangList: Barang[], gudang: string | null, searchQuery: string) => {
-    let filtered = dedupeBarangs(barangList);
-
-    // Filter by gudang
-    if (gudang && gudang.trim()) {
-      const normalizedGudang = gudang.trim();
-      filtered = filtered.filter(item => {
-        const itemKd = (item.kd || '').trim();
-        return itemKd === normalizedGudang;
-      });
-    }
-
-    // Filter by search
-    if (searchQuery && searchQuery.trim()) {
-      const searchLower = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.nama || '').toLowerCase().includes(searchLower) ||
-        (item.kd_br || '').toLowerCase().includes(searchLower) ||
-        (item.kd_sp || '').toLowerCase().includes(searchLower)
-      );
-    }
-
-    setFilteredBarangs(filtered);
-    setDisplayedBarangs(filtered);
-  };
-
   const fetchData = async (
     page: number = 1,
     searchQuery: string = '',
-    gudangFilter: string | null = selectedGudang,
-    _apiGudangs?: ApiGudang[]
+    gudangFilter: string | null = selectedGudang
   ): Promise<void> => {
     try {
-      if (page === 1) {
+      if (page === 1 && !isInitialized) {
         dispatch(setLoading(true));
-      } else {
+      } else if (page > 1) {
         setLoadingMore(true);
       }
       dispatch(setError(null));
 
-      // Pass gudang filter to API if available
       const result = await getBarangsWithPagination(page, ITEMS_PER_PAGE, searchQuery, gudangFilter || undefined);
+      const uniqueIncoming = dedupeBarangs(result.data);
 
       if (page === 1) {
-        const uniqueBarangs = dedupeBarangs(result.data);
-        dispatch(setBarangsAction(uniqueBarangs));
-        updateGudangCounts(uniqueBarangs);
-        applyFilters(uniqueBarangs, gudangFilter, searchQuery);
+        dispatch(setBarangsAction(uniqueIncoming));
+        setDisplayedBarangs(uniqueIncoming);
+        setTotalItems(result.total);
+        setTotalPages(result.totalPages);
       } else {
-        const uniqueIncoming = dedupeBarangs(result.data);
-        const newBarangs = dedupeBarangs([...reduxBarangs, ...uniqueIncoming]);
-        dispatch(addMoreBarangs(uniqueIncoming));
-        updateGudangCounts(newBarangs);
-        // IMPORTANT: When loading more, reapply filter to ensure gudang filter is maintained
-        applyFilters(newBarangs, gudangFilter, searchQuery);
+        setDisplayedBarangs((prev) => dedupeBarangs([...prev, ...uniqueIncoming]));
+        if (result.total > 0) {
+          setTotalItems(result.total);
+        }
+        setTotalPages((prev) => {
+          if (uniqueIncoming.length < ITEMS_PER_PAGE) {
+            return page;
+          }
+          return Math.max(prev, result.totalPages);
+        });
       }
 
       setCurrentPage(page);
-      setTotalPages(result.totalPages);
     } catch (err) {
       console.error('Error fetching data:', err);
       dispatch(setError('Failed to load barang data. Using default data.'));
       if (page === 1) {
         dispatch(setBarangsAction(DEFAULT_BARANGS));
-        updateGudangCounts(DEFAULT_BARANGS);
-        applyFilters(DEFAULT_BARANGS, gudangFilter, searchQuery);
+        setDisplayedBarangs(DEFAULT_BARANGS);
         setTotalPages(1);
+        setTotalItems(DEFAULT_BARANGS.length);
       }
     } finally {
       dispatch(setLoading(false));
@@ -497,7 +457,7 @@ export default function HomeScreen() {
   };
 
   const handleGudangSelect = (kd: string) => {
-    const newGudang = selectedGudang === kd ? null : kd;
+    const newGudang = !kd ? null : selectedGudang === kd ? null : kd;
     setSelectedGudang(newGudang);
     setCurrentPage(1);
     setShowGudangModal(false);
@@ -510,12 +470,43 @@ export default function HomeScreen() {
     return found ? found.name : selectedGudang;
   };
 
+  const cartQtyByKd = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of cartItems) {
+      map.set(item.kd_br, item.quantity);
+    }
+    return map;
+  }, [cartItems]);
+
+  const favoriteKdSet = useMemo(
+    () => new Set(favoriteItems.map((fav: Barang) => fav.kd_br)),
+    [favoriteItems]
+  );
+
+  const gudangModalData = useMemo(
+    () => [
+      {
+        kd: 'all',
+        name: 'Semua Gudang',
+        count: gudangs.reduce((sum, g) => sum + g.count, 0),
+        colorIndex: -1,
+      },
+      ...gudangs,
+    ],
+    [gudangs]
+  );
+
   const handleSearch = (query: string) => {
     setSearch(query);
     setCurrentPage(1);
     setLoadingMore(false);
     loadMoreGuardRef.current = false;
-    applyFilters(reduxBarangs, selectedGudang, query);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    searchTimerRef.current = setTimeout(() => {
+      fetchData(1, query, selectedGudang);
+    }, 400);
   };
 
   const handleLoadMore = () => {
@@ -529,14 +520,14 @@ export default function HomeScreen() {
   };
 
   const getQuantity = (kd_br: string) => {
-    return cartItems.find(item => item.kd_br === kd_br)?.quantity || 0;
+    return cartQtyByKd.get(kd_br) || 0;
   };
 
-  const openAddToCartModal = (barang: Barang) => {
+  const openAddToCartModal = useCallback((barang: Barang) => {
     setSelectedBarangForCart(barang);
     setCartQtyInput('1');
     setShowQtyModal(true);
-  };
+  }, []);
 
   const closeAddToCartModal = () => {
     setShowQtyModal(false);
@@ -563,10 +554,15 @@ export default function HomeScreen() {
     closeAddToCartModal();
   };
 
+  const cardTheme = useMemo(
+    () => ({ isDark, cardBg, textColor }),
+    [isDark, cardBg, textColor]
+  );
+
   if (reduxLoading) {
     return (
       <View style={[styles.container, { backgroundColor: containerBg }]}>
-        <TopBannerBlock isDark={isDark} barangs={reduxBarangs} />
+        <TopBannerBlock isDark={isDark} barangs={reduxBarangs} active={isFocused} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066FF" />
           <Text style={[styles.loadingText, { color: textColor }]}>Loading menu...</Text>
@@ -582,7 +578,7 @@ export default function HomeScreen() {
         <Text style={[styles.headerTitle, { color: textColor }]}>Daftar Barang</Text>
       </View> */}
 
-      <TopBannerBlock isDark={isDark} barangs={reduxBarangs} />
+      <TopBannerBlock isDark={isDark} barangs={reduxBarangs} active={isFocused} />
 
       {/* Search Bar */}
       <View style={[styles.searchContainer, { backgroundColor: 'headerBg', borderBottomColor: headerBorder }]}>
@@ -601,7 +597,9 @@ export default function HomeScreen() {
 
       {/* Barang Title */}
       <View style={[styles.sectionTitleContainer, { backgroundColor: sectionBg }]}>
-        <Text style={[styles.sectionTitle, { color: textColor }]}>Daftar Barang ({displayedBarangs.length})</Text>
+        <Text style={[styles.sectionTitle, { color: textColor }]}>
+          Daftar Barang ({displayedBarangs.length}{totalItems > displayedBarangs.length ? ` dari ${totalItems}` : ''})
+        </Text>
       </View>
 
       {/* Main Content */}
@@ -618,23 +616,22 @@ export default function HomeScreen() {
               <BarangCard
                 barang={item}
                 quantity={getQuantity(item.kd_br)}
-                isFavorite={favoriteItems.some((fav: Barang) => fav.kd_br === item.kd_br)}
-                onAddToCart={() => openAddToCartModal(item)}
-                onToggleFavorite={() => dispatch(toggleFavorite(item))}
-                theme={{ isDark, cardBg, textColor }}
+                isFavorite={favoriteKdSet.has(item.kd_br)}
+                onAddToCart={openAddToCartModal}
+                theme={cardTheme}
               />
             )}
             keyExtractor={(item, index) => `${getBarangIdentityKey(item)}-${index}`}
             numColumns={barangColumns}
             scrollEnabled={true}
             columnWrapperStyle={styles.barangRow}
-            initialNumToRender={barangColumns * 2}
-            maxToRenderPerBatch={barangColumns * 2}
-            windowSize={7}
+            initialNumToRender={barangColumns * 3}
+            maxToRenderPerBatch={barangColumns * 3}
+            windowSize={5}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={Platform.OS === 'android'}
-            onEndReached={search.trim() ? undefined : handleLoadMore}
-            onEndReachedThreshold={0.3}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -645,14 +642,14 @@ export default function HomeScreen() {
               />
             }
             ListFooterComponent={
-              loadingMore && !search.trim() ? (
+              loadingMore ? (
                 <View style={styles.footerLoader}>
                   <ActivityIndicator size="small" color="#0066FF" />
-                  <Text style={styles.footerText}>Loading more...</Text>
+                  <Text style={styles.footerText}>Memuat lagi...</Text>
                 </View>
               ) : currentPage >= totalPages && displayedBarangs.length > 0 ? (
                 <View style={styles.footerLoader}>
-                  <Text style={styles.footerText}>No more items</Text>
+                  <Text style={styles.footerText}>Semua barang sudah ditampilkan</Text>
                 </View>
               ) : null
             }
@@ -661,7 +658,7 @@ export default function HomeScreen() {
       </View>
       {/* Gudang Selector Button */}
       <TouchableOpacity
-        style={[styles.gudangSelectorButton, { backgroundColor: isDark ?'#333' : '#ddd', borderBottomColor: headerBorder }]}
+        style={[styles.gudangSelectorButton, { backgroundColor: isDark ? '#333' : '#ddd', borderBottomColor: headerBorder }]}
         onPress={() => setShowGudangModal(true)}
       >
         <View style={styles.gudangSelectorContent}>
@@ -694,7 +691,7 @@ export default function HomeScreen() {
             {/* Gudang List */}
             <FlatList
               key={`gudang-modal-${gudangColumns}`}
-              data={[{ kd: 'all', name: 'Semua Gudang', count: reduxBarangs.length, colorIndex: -1 }, ...gudangs]}
+              data={gudangModalData}
               renderItem={({ item }) => {
                 const isAll = item.kd === 'all';
                 const bgColor = getGudangColor(item.colorIndex, isAll);
@@ -795,34 +792,36 @@ export default function HomeScreen() {
 }
 
 // Separate component for Barang Card for better performance and TS clarity
-const BarangCard = ({
+const BarangCard = React.memo(function BarangCard({
   barang,
   quantity,
   isFavorite,
   onAddToCart,
-  onToggleFavorite,
   theme,
 }: {
   barang: Barang;
   quantity: number;
   isFavorite: boolean;
-  onAddToCart: () => void;
-  onToggleFavorite: () => void;
+  onAddToCart: (barang: Barang) => void;
   theme: { isDark: boolean; cardBg: string; textColor: string };
-}) => {
+}) {
+  const dispatch = useAppDispatch();
   const price = parseFloat(barang.h_anggota) || 0;
+  const imageUrl = getBarangImageUrl(barang.gambar);
 
   return (
     <View style={[styles.barangCard, { backgroundColor: theme.cardBg }]}>
       <View style={styles.barangCardImageContainer}>
         <Image
-          source={barang.gambar ? { uri: barang.gambar } : PLACEHOLDER_IMAGE}
+          source={imageUrl ? { uri: imageUrl } : PLACEHOLDER_IMAGE}
           style={styles.barangImage}
-          resizeMode="cover"
+          contentFit="fill"
+          cachePolicy="disk"
+          recyclingKey={barang.kd_br}
         />
         <TouchableOpacity
           style={styles.favoriteButton}
-          onPress={onToggleFavorite}
+          onPress={() => dispatch(toggleFavorite(barang))}
         >
           <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={20} color={isFavorite ? '#E53935' : '#fff'} />
         </TouchableOpacity>
@@ -872,13 +871,13 @@ const BarangCard = ({
       </View>
       <TouchableOpacity
         style={[styles.addButton, quantity > 0 && styles.addButtonActive]}
-        onPress={onAddToCart}
+        onPress={() => onAddToCart(barang)}
       >
         <Text style={styles.addButtonText}>🛒 {quantity > 0 ? 'Tambah Lagi' : 'Tambah'}</Text>
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -1417,13 +1416,6 @@ const styles = StyleSheet.create({
     marginRight: 28,
     flexShrink: 0,
     maxHeight: 34,
-  },
-  tickerThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 4,
-    marginRight: 8,
-    backgroundColor: 'rgba(0,0,0,0.15)',
   },
   tickerName: {
     fontSize: 12,

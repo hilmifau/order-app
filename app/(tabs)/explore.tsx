@@ -1,5 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
-import { createDetailPoNote, createPoNote, DetailPoNotePayload, PoNotePayload } from '@/services/orderApi';
+import { abortPoNote, createDetailPoNotesBulk, createPoNote, parsePoNoteNoTran, PoNotePayload } from '@/services/orderApi';
 import { addToCart, CartItem, clearCart, removeFromCart, updateQuantity, updateVariant } from '@/store/cartSlice';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { getFriendlyErrorMessage } from '@/utils/apiError';
@@ -8,8 +8,8 @@ import { generateInvoiceHtml, PdfItem } from '@/utils/pdfUtils';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type CartItemRowProps = {
   item: CartItem;
@@ -22,15 +22,35 @@ type CartItemRowProps = {
 // Didefinisikan di luar ExploreScreen agar identitas komponen stabil antar render;
 // jika di dalam, setiap render membuat komponen baru sehingga TextInput di-remount
 // dan keyboard kehilangan fokus setiap kali mengetik.
-const CartItemRow = ({ item, isDark, cardBg, textColor, secondaryTextColor }: CartItemRowProps) => {
+const CartItemRow = React.memo(function CartItemRow({
+  item,
+  isDark,
+  cardBg,
+  textColor,
+  secondaryTextColor,
+}: CartItemRowProps) {
   const dispatch = useAppDispatch();
   const price = parseFloat(item.barang.h_anggota) || 0;
   const itemTotal = price * item.quantity;
   const [inputValue, setInputValue] = useState(item.quantity.toString());
+  const [variantValue, setVariantValue] = useState(item.variant || '');
+  const qtyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setInputValue(item.quantity.toString());
   }, [item.quantity]);
+
+  useEffect(() => {
+    setVariantValue(item.variant || '');
+  }, [item.variant]);
+
+  useEffect(() => {
+    return () => {
+      if (qtyTimerRef.current) {
+        clearTimeout(qtyTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleUpdateQuantity = (kd_br: string, quantity: number) => {
     if (quantity <= 0) {
@@ -42,19 +62,29 @@ const CartItemRow = ({ item, isDark, cardBg, textColor, secondaryTextColor }: Ca
 
   const handleQuantityChange = (text: string) => {
     setInputValue(text);
-    const num = parseInt(text);
+    const num = parseInt(text, 10);
     if (!isNaN(num) && num >= 0) {
-      handleUpdateQuantity(item.kd_br, num);
+      if (qtyTimerRef.current) {
+        clearTimeout(qtyTimerRef.current);
+      }
+      qtyTimerRef.current = setTimeout(() => {
+        handleUpdateQuantity(item.kd_br, num);
+      }, 400);
     }
   };
 
   const handleBlur = () => {
-    const num = parseInt(inputValue);
+    if (qtyTimerRef.current) {
+      clearTimeout(qtyTimerRef.current);
+    }
+    const num = parseInt(inputValue, 10);
     if (isNaN(num) || num < 0) {
       setInputValue('1');
       handleUpdateQuantity(item.kd_br, 1);
     } else if (num === 0) {
       dispatch(removeFromCart(item.kd_br));
+    } else if (num !== item.quantity) {
+      handleUpdateQuantity(item.kd_br, num);
     }
   };
 
@@ -81,8 +111,9 @@ const CartItemRow = ({ item, isDark, cardBg, textColor, secondaryTextColor }: Ca
                 borderColor: isDark ? '#444' : '#ddd',
               },
             ]}
-            value={item.variant || ''}
-            onChangeText={(text) => dispatch(updateVariant({ kd_br: item.kd_br, variant: text }))}
+            value={variantValue}
+            onChangeText={setVariantValue}
+            onBlur={() => dispatch(updateVariant({ kd_br: item.kd_br, variant: variantValue }))}
             placeholder="Varian Rasa"
             placeholderTextColor={secondaryTextColor}
           />
@@ -137,7 +168,7 @@ const CartItemRow = ({ item, isDark, cardBg, textColor, secondaryTextColor }: Ca
       </View>
     </View>
   );
-};
+});
 
 export default function ExploreScreen() {
   const dispatch = useAppDispatch();
@@ -147,6 +178,7 @@ export default function ExploreScreen() {
   const user = useAppSelector(state => state.auth.user);
   const [isOrdered, setIsOrdered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('');
   const [noTran, setNoTran] = useState<string | null>(null);
 
   const generateDates = () => {
@@ -186,7 +218,7 @@ export default function ExploreScreen() {
 
   const handleOrder = async () => {
     if (cartItems.length === 0) {
-      Alert.alert('Keranjang Kosong', 'Silakan tambahkan barang terlebih dahulu');
+      Alert.alert('Keranjang Kosong', 'Silakan tambahkan barang terlebih dahulu.');
       return;
     }
     if (!user?.kd_cus) {
@@ -197,12 +229,48 @@ export default function ExploreScreen() {
       Alert.alert('Pilih Tanggal', 'Silakan pilih Tanggal Pengiriman terlebih dahulu.');
       return;
     }
+
+    const invalid = cartItems.filter((item) => {
+      const qty = Number(item.quantity);
+      const price = parseFloat(item.barang?.h_anggota);
+      return !item.kd_br || !item.barang?.nama || !Number.isFinite(qty) || qty < 1 || !Number.isFinite(price);
+    });
+    if (invalid.length > 0) {
+      Alert.alert(
+        'Ada Barang Tidak Valid',
+        `${invalid.length} baris keranjang tidak lengkap (kode, nama, jumlah, atau harga). Periksa keranjang lalu coba lagi.`
+      );
+      return;
+    }
+
+    const itemCount = cartItems.length;
+    const qtyTotal = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const total = Math.round(calculateTotal());
+    const dateLabel =
+      deliveryDates.find((d) => d.value === selectedDate)?.label || formatDateDdMmYyyy(selectedDate);
+
+    const confirmed =
+      Platform.OS === 'web'
+        ? window.confirm(
+            `Pesan ${itemCount} jenis barang (${qtyTotal} qty)?\nTotal Rp ${total.toLocaleString('id-ID')}\nKirim: ${dateLabel}`
+          )
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              'Konfirmasi Pesanan',
+              `${itemCount} jenis barang • ${qtyTotal} qty\nTotal: Rp ${total.toLocaleString('id-ID')}\nTanggal kirim: ${dateLabel}\n\nLanjutkan pemesanan?`,
+              [
+                { text: 'Batal', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Pesan', onPress: () => resolve(true) },
+              ]
+            );
+          });
+
+    if (!confirmed) return;
+
     const now = new Date();
     const pad2 = (value: number) => value.toString().padStart(2, '0');
     const tgl = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
     const jam = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
-
-    const total = calculateTotal();
 
     const masterPayload: PoNotePayload = {
       tgl,
@@ -214,74 +282,82 @@ export default function ExploreScreen() {
       status: 'PROSES ORDER',
       total_po: total,
       jenis: 'Anggota',
-      // items: cartItems,
     };
+
     setIsSubmitting(true);
+    setSubmitStatus('Membuat nomor transaksi…');
+    let createdNoTran: string | null = null;
+
     try {
       const poNoteRes = await createPoNote(masterPayload);
-
-      let finalNoTran: string | null = null;
-      if (typeof poNoteRes?.data === 'number' || typeof poNoteRes?.data === 'string') {
-        finalNoTran = String(poNoteRes.data);
-      } else if (poNoteRes?.data && typeof poNoteRes.data === 'object') {
-        finalNoTran = String(
-          poNoteRes.data.no_tran || poNoteRes.data.NO_PO || poNoteRes.data.id || poNoteRes.data.po_no || ''
-        );
-      } else if (poNoteRes && typeof poNoteRes === 'object') {
-        finalNoTran = String(
-          poNoteRes.no_tran || poNoteRes.NO_PO || poNoteRes.id || poNoteRes.po_no || ''
-        );
+      createdNoTran = parsePoNoteNoTran(poNoteRes);
+      if (!createdNoTran) {
+        throw new Error('NO_TRAN_MISSING');
       }
 
-      finalNoTran = finalNoTran && finalNoTran !== 'undefined' && finalNoTran !== 'null' ? finalNoTran : null;
-      if (!finalNoTran) {
-        Alert.alert(
-          'Gagal Mendapatkan No. Transaksi',
-          'Response tidak mengandung no_tran valid. Lihat console untuk detail.'
-        );
-        throw new Error('Gagal mendapatkan no_tran dari PO Note');
-      }
-
-      let urut = 1;
-      for (const item of cartItems) {
-        const price = parseFloat(item.barang.h_anggota) || 0;
-        const subtotal = price * item.quantity;
-
-        const detailPayload: DetailPoNotePayload = {
-          no_tran: Number(finalNoTran),
-          NO_PO: finalNoTran,
-          NO_URUT: urut.toString(),
+      const details = cartItems.map((item, index) => {
+        const price = Math.round(parseFloat(item.barang.h_anggota) || 0);
+        const qty = item.quantity;
+        return {
+          no_tran: Number(createdNoTran),
+          NO_PO: createdNoTran,
+          NO_URUT: index + 1,
           KD_BR: item.barang.kd_br,
           RASA: item.variant || item.barang.ket || item.barang.jenis_produk || '',
-          QTY: item.quantity,
+          QTY: qty,
           SAT: item.barang.satuan,
           harga: price,
-          subtotal,
+          subtotal: price * qty,
           kd: item.barang.kd,
           nama_br: item.barang.nama,
         };
+      });
 
-        await createDetailPoNote(detailPayload);
-        urut += 1;
-      }
+      setSubmitStatus(`Menyimpan barang 0 dari ${details.length}…`);
+      await createDetailPoNotesBulk(details, (saved, all) => {
+        setSubmitStatus(`Menyimpan barang ${saved} dari ${all}…`);
+      });
 
-      setNoTran(finalNoTran); // Save the transaction number
+      setNoTran(createdNoTran);
       setIsOrdered(true);
-      Alert.alert('Order Berhasil', 'Order Anda telah dicatat. Anda sekarang bisa mencetak PDF.');
+      setSubmitStatus('');
+      Alert.alert(
+        'Pesanan Berhasil',
+        `No. transaksi: ${createdNoTran}\n${itemCount} jenis barang (${qtyTotal} qty)\nTotal: Rp ${total.toLocaleString('id-ID')}\nTanggal kirim: ${dateLabel}\n\nAnda bisa mencetak PDF sekarang.`
+      );
     } catch (error) {
       console.error('Order error:', error);
-      Alert.alert(
-        'Gagal Order',
-        getFriendlyErrorMessage(error, { fallback: 'Terjadi kesalahan saat menyimpan order. Silakan coba lagi.' })
-      );
+      let rolledBack = false;
+      if (createdNoTran) {
+        setSubmitStatus('Membatalkan pesanan yang tidak lengkap…');
+        rolledBack = await abortPoNote(createdNoTran);
+      }
+
+      const isMissingNoTran = error instanceof Error && error.message === 'NO_TRAN_MISSING';
+      const detail = isMissingNoTran
+        ? 'Server tidak mengembalikan nomor transaksi. Pesanan belum tercatat. Silakan coba lagi.'
+        : getFriendlyErrorMessage(error, {
+            fallback: 'Gagal menyimpan baris pesanan. Silakan coba lagi.',
+          });
+
+      const followUp = rolledBack
+        ? 'Pesanan yang terlanjur dibuat sudah dibatalkan. Keranjang Anda masih ada.'
+        : createdNoTran
+          ? `Keranjang masih ada. Jika nomor ${createdNoTran} muncul di Riwayat tanpa lengkap, jangan diproses — coba pesan ulang atau hubungi admin.`
+          : 'Keranjang Anda masih ada. Silakan coba lagi.';
+
+      Alert.alert('Pesanan Gagal', `${detail}\n\n${followUp}`);
+      setNoTran(null);
+      setIsOrdered(false);
     } finally {
       setIsSubmitting(false);
+      setSubmitStatus('');
     }
   };
 
   const handlePrintPDF = async () => {
     if (!isOrdered) {
-      Alert.alert('Order Belum Dikonfirmasi', 'Silakan klik tombol Order terlebih dahulu');
+      Alert.alert('PDF Belum Siap', 'Pesan dulu sampai berhasil, baru cetak PDF.');
       return;
     }
 
@@ -299,6 +375,7 @@ export default function ExploreScreen() {
       price: parseFloat(item.barang.h_anggota) || 0,
       quantity: item.quantity,
       subtotal: (parseFloat(item.barang.h_anggota) || 0) * item.quantity,
+      ket: item.barang.kd || '',
     }));
 
     const html = generateInvoiceHtml(
@@ -307,13 +384,22 @@ export default function ExploreScreen() {
         username: user.username,
         storeName: user.storeName,
         kd_cus: user.kd_cus,
-        email: user.email
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
       } : null,
       pdfItems,
       total,
       orderDate,
       orderTime,
-      noTran // Pass transaction number to PDF
+      noTran,
+      {
+        title: 'DETAIL PO',
+        operator: user?.username || user?.name,
+        jenisTran: 'Anggota',
+        tAkhirB: selectedDate || undefined,
+        status: 'PROSES ORDER',
+      }
     );
 
     try {
@@ -324,7 +410,7 @@ export default function ExploreScreen() {
       if (Platform.OS === 'web') {
         // Web: open in new tab
         window.open(uri, '_blank');
-        Alert.alert('PDF Berhasil', 'PDF invoice telah dibuka di tab baru!');
+        Alert.alert('PDF Berhasil', 'Invoice dibuka di tab baru. Keranjang dikosongkan.');
 
         // Kosongkan keranjang dan reset state setelah print
         dispatch(clearCart());
@@ -339,11 +425,11 @@ export default function ExploreScreen() {
         // Kosongkan keranjang dan reset state setelah sharing
         dispatch(clearCart());
         setIsOrdered(false);
-        Alert.alert('Berhasil', 'PDF Invoice telah berhasil dibuat dan dishare!');
+        Alert.alert('PDF Berhasil', 'Invoice berhasil dibuat. Keranjang dikosongkan.');
       }
     } catch (error) {
       console.error('PDF error:', error);
-      Alert.alert('Error', 'Gagal membuat PDF');
+      Alert.alert('Gagal Membuat PDF', 'File PDF tidak bisa dibuat. Pesanan Anda tetap tersimpan. Coba cetak lagi.');
     }
   };
 
@@ -351,6 +437,25 @@ export default function ExploreScreen() {
     setIsOrdered(false);
     setNoTran(null);
     dispatch(clearCart());
+  };
+
+  const handleClearCart = async () => {
+    const confirmed =
+      Platform.OS === 'web'
+        ? window.confirm('Semua barang di keranjang akan dihapus. Lanjutkan?')
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              'Kosongkan Keranjang',
+              'Semua barang di keranjang akan dihapus. Lanjutkan?',
+              [
+                { text: 'Batal', onPress: () => resolve(false), style: 'cancel' },
+                { text: 'Kosongkan', onPress: () => resolve(true), style: 'destructive' },
+              ]
+            );
+          });
+
+    if (!confirmed) return;
+    resetOrder();
   };
 
   const handleAddFavorites = () => {
@@ -371,7 +476,12 @@ export default function ExploreScreen() {
   };
 
 
-  const total = calculateTotal();
+  const total = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const price = parseFloat(item.barang.h_anggota) || 0;
+      return sum + price * item.quantity;
+    }, 0);
+  }, [cartItems]);
 
   return (
     <View style={[styles.container, { backgroundColor: containerBg }]}>
@@ -394,24 +504,24 @@ export default function ExploreScreen() {
       {/* Cart Items */}
       {cartItems.length > 0 ? (
         <>
-          <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-            <View style={styles.cartItemsSection}>
-              <FlatList
-                data={cartItems}
-                renderItem={({ item }) => (
-                  <CartItemRow
-                    item={item}
-                    isDark={isDark}
-                    cardBg={cardBg}
-                    textColor={textColor}
-                    secondaryTextColor={secondaryTextColor}
-                  />
-                )}
-                keyExtractor={item => item.kd_br}
-                scrollEnabled={false}
+          <FlatList
+            data={cartItems}
+            style={styles.scrollContainer}
+            renderItem={({ item }) => (
+              <CartItemRow
+                item={item}
+                isDark={isDark}
+                cardBg={cardBg}
+                textColor={textColor}
+                secondaryTextColor={secondaryTextColor}
               />
-            </View>
-          </ScrollView>
+            )}
+            keyExtractor={(item) => item.kd_br}
+            contentContainerStyle={styles.cartItemsSection}
+            initialNumToRender={8}
+            windowSize={7}
+            removeClippedSubviews={Platform.OS === 'android'}
+          />
 
           {/* Order Summary */}
           <View style={[styles.summarySection, { backgroundColor: cardBg, borderTopColor: isDark ? '#333' : '#ddd' }]}>
@@ -430,31 +540,38 @@ export default function ExploreScreen() {
             </View>
 
             <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: isDark ? '#333' : '#ddd', borderTopWidth: 0 }]}>
-              <Text style={[styles.totalLabel, { color: textColor }]}>Total</Text>
+              <Text style={[styles.totalLabel, { color: textColor }]}>
+                Total ({cartItems.length} jenis)
+              </Text>
               <Text style={[styles.totalValue, { color: isDark ? '#FFD700' : '#FF9800' }]}>Rp {total.toLocaleString('id-ID')}</Text>
             </View>
+
+            {isSubmitting && !!submitStatus ? (
+              <Text style={[styles.submitStatusText, { color: secondaryTextColor }]}>{submitStatus}</Text>
+            ) : null}
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={styles.clearButton}
-                onPress={resetOrder}
+                onPress={handleClearCart}
+                disabled={isSubmitting}
               >
                 <Text style={styles.clearButtonText}>Kosongkan</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.orderButton}
+                style={[styles.orderButton, isSubmitting && { opacity: 0.7 }]}
                 onPress={handleOrder}
                 disabled={isSubmitting}
               >
                 <Text style={styles.orderButtonText}>{isSubmitting ? '⏳ Menyimpan...' : '📋 Pesan'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.pdfButton, !isOrdered && styles.pdfButtonDisabled]}
+                style={[styles.pdfButton, (!isOrdered || isSubmitting) && styles.pdfButtonDisabled]}
                 onPress={handlePrintPDF}
-                disabled={!isOrdered}
+                disabled={!isOrdered || isSubmitting}
               >
-                <Text style={[styles.pdfButtonText, !isOrdered && styles.pdfButtonTextDisabled]}>Print PDF</Text>
+                <Text style={[styles.pdfButtonText, (!isOrdered || isSubmitting) && styles.pdfButtonTextDisabled]}>Print PDF</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -737,6 +854,11 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  submitStatusText: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
   },
   pdfButton: {
     flex: 1,

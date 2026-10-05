@@ -1,8 +1,9 @@
 
 import Config from '@/constants/Config';
 import { getFriendlyErrorMessage } from '@/utils/apiError';
+import { UserRole, normalizeRole } from '@/utils/roles';
 import axiosInstance from './axiosInstance';
-import { getAuthToken } from './storageService';
+import { getAuthToken, getDeviceId } from './storageService';
 
 export interface LoginCredentials {
   email: string;
@@ -17,25 +18,42 @@ export interface RegisterCredentials {
   kd_cus: string;
 }
 
+export interface AuthUser {
+  id: string;
+  kd_cus: string;
+  username: string;
+  name: string;
+  storeName: string;
+  address: string;
+  phone: string;
+  email: string;
+  memberSince: string;
+  role: UserRole;
+}
+
 export interface AuthResponse {
   success: boolean;
   token: string;
-  user: {
-    id: string;
-    kd_cus: string;
-    username: string;
-    name: string;
-    storeName: string;
-    address: string;
-    phone: string;
-    email: string;
-    memberSince: string;
-  };
+  user: AuthUser;
   message?: string;
 }
 
+function mapUser(userData: any, fallbackEmail = ''): AuthUser {
+  return {
+    id: String(userData?.id || ''),
+    kd_cus: userData?.kd_cus || '',
+    username: userData?.name || userData?.username || '',
+    name: userData?.name || 'User',
+    storeName: userData?.storeName || userData?.store_name || 'Store',
+    address: userData?.address || '',
+    phone: userData?.phone || '',
+    email: userData?.email || fallbackEmail,
+    memberSince: userData?.memberSince || userData?.created_at || new Date().toISOString(),
+    role: normalizeRole(userData?.role),
+  };
+}
+
 export const loginApi = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  // Bypass sementara saat backend down: aktifkan via EXPO_PUBLIC_USE_MOCK_DATA=true di .env
   if (Config.USE_MOCK_DATA) {
     return {
       success: true,
@@ -50,17 +68,17 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
         phone: '081234567890',
         email: credentials.email || 'demo@example.com',
         memberSince: new Date().toISOString(),
+        role: 'customer',
       },
     };
   }
 
   try {
-    const payload = {
+    const response = await axiosInstance.post('/login', {
       email: credentials.email,
       password: credentials.password,
-    };
-
-    const response = await axiosInstance.post('/login', payload);
+      device_id: await getDeviceId(),
+    });
 
     if (response.data && response.data.success) {
       const userData = response.data.data?.user || response.data.user;
@@ -69,17 +87,7 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
       return {
         success: true,
         token,
-        user: {
-          id: userData?.id || '',
-          kd_cus: userData?.kd_cus || '',
-          username: userData?.name || '',
-          name: userData?.name || 'User',
-          storeName: userData?.storeName || 'Store',
-          address: userData?.address || '',
-          phone: userData?.phone || '',
-          email: userData?.email || credentials.email,
-          memberSince: userData?.memberSince || new Date().toISOString(),
-        },
+        user: mapUser(userData, credentials.email),
       };
     }
 
@@ -90,7 +98,6 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
       message: response.data?.message || 'Login gagal',
     };
   } catch (error: any) {
-    // Log detail teknis untuk debugging, tapi tampilkan pesan ramah ke user
     console.error('Login API error:', error?.response?.status, error?.response?.data || error?.message);
 
     const wrongCredentials = 'Email atau password salah. Periksa kembali data login Anda.';
@@ -114,23 +121,18 @@ export const loginApi = async (credentials: LoginCredentials): Promise<AuthRespo
 
 export const registerApi = async (credentials: RegisterCredentials): Promise<AuthResponse> => {
   try {
-    const response = await axiosInstance.post('/register', credentials);
+    const response = await axiosInstance.post('/register', {
+      ...credentials,
+      device_id: await getDeviceId(),
+    });
 
     if (response.data && response.data.success) {
+      const userData = response.data.data?.user || response.data.user;
+
       return {
         success: true,
         token: response.data.token || response.data.data?.token || '',
-        user: {
-          id: response.data.user?.id || response.data.data?.user?.id || '',
-          kd_cus: response.data.user?.kd_cus || response.data.data?.user?.kd_cus || '',
-          username: response.data.user?.name || response.data.data?.user?.name || '',
-          name: response.data.user?.name || response.data.data?.user?.name || 'User',
-          storeName: 'Store',
-          address: '',
-          phone: '',
-          email: response.data.user?.email || response.data.data?.user?.email || credentials.email,
-          memberSince: new Date().toISOString(),
-        },
+        user: mapUser(userData, credentials.email),
       };
     }
 
@@ -141,10 +143,8 @@ export const registerApi = async (credentials: RegisterCredentials): Promise<Aut
       message: response.data?.message || 'Registrasi gagal',
     };
   } catch (error: any) {
-    // Log detail teknis untuk debugging, tapi tampilkan pesan ramah ke user
     console.error('Register API error:', error?.response?.status, error?.response?.data || error?.message);
 
-    // Deteksi kasus validasi yang umum agar pesannya lebih spesifik
     let validationMessage = 'Data registrasi tidak valid. Periksa kembali isian Anda.';
     const validationErrors = error?.response?.data?.errors;
     if (validationErrors && typeof validationErrors === 'object') {
@@ -173,64 +173,39 @@ export const registerApi = async (credentials: RegisterCredentials): Promise<Aut
   }
 };
 
-// Validasi token (untuk check session saat app start)
-// Token Sanctum akan otomatis di-attach oleh axiosInstance interceptor
 export const validateToken = async (token: string): Promise<boolean> => {
-  // Cek apakah token ada dan tidak empty
-  if (!token || token.trim() === '') {
-    return false;
-  }
-
-  try {
-    // Token Sanctum valid selama non-empty
-    // Interceptor di axiosInstance akan otomatis menambahkan header Authorization
-    return true;
-  } catch (error) {
-    return false;
-  }
+  return Boolean(token && token.trim() !== '');
 };
-// Get current user profile (untuk restore session)
-export const getCurrentUserApi = async (): Promise<{ success: boolean; user: any; message?: string }> => {
+
+export const getCurrentUserApi = async (): Promise<{ success: boolean; user: AuthUser | null; message?: string }> => {
   try {
     const token = await getAuthToken();
-    // Laravel Sanctum biasanya menyediakan endpoint /user untuk get authenticated user
-    // Menambahkan headers secara eksplisit sesuai permintaan user
-    const response = await axiosInstance.get('/users', {
+    const response = await axiosInstance.get('/me', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
 
     if (response.data) {
-      const userData = response.data.data?.user || response.data.user || response.data.data || response.data;
+      const userData = response.data.data || response.data.user || response.data;
 
       return {
         success: true,
-        user: {
-          id: userData?.id || '',
-          kd_cus: userData?.kd_cus || '',
-          username: userData?.name || '',
-          name: userData?.name || 'User',
-          storeName: userData?.storeName || userData?.store_name || 'Store',
-          address: userData?.address || '',
-          phone: userData?.phone || '',
-          email: userData?.email || '',
-          memberSince: userData?.memberSince || userData?.created_at || new Date().toISOString(),
-        },
+        user: mapUser(userData),
       };
     }
 
-    return { success: false, user: null as any, message: 'Data user tidak ditemukan' };
+    return { success: false, user: null, message: 'Data user tidak ditemukan' };
   } catch (error: any) {
     console.error('Error fetching current user:', error?.response?.status, error?.response?.data || error.message);
     return {
       success: false,
-      user: null as any,
+      user: null,
       message: getFriendlyErrorMessage(error, { fallback: 'Gagal mengambil data profil. Silakan coba lagi.' }),
     };
   }
 };
-// Logout user
+
 export const logoutApi = async (): Promise<{ success: boolean; message?: string }> => {
   try {
     const token = await getAuthToken();
@@ -245,7 +220,6 @@ export const logoutApi = async (): Promise<{ success: boolean; message?: string 
     };
   } catch (error: any) {
     console.error('Logout API Error:', error?.response?.status, error?.response?.data || error.message);
-    // Tetap return true agar di sisi client proses logout berlanjut jika API gagal
     return { success: true, message: 'Logout lokal berhasil (API error)' };
   }
 };

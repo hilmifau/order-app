@@ -3,6 +3,7 @@ import authReducer from './authSlice';
 import cartReducer from './cartSlice';
 import inventoryReducer from './inventorySlice';
 import favoriteReducer from './favoriteSlice';
+import opnameCartReducer from './opnameCartSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     cart: cartReducer,
     auth: authReducer,
     favorites: favoriteReducer,
+    opnameCart: opnameCartReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -17,17 +19,18 @@ export const store = configureStore({
       // `barangs` / cart / favorites payloads exceed the default 32ms warn threshold and add GC churn.
       serializableCheck: {
         warnAfter: 128,
-        ignoredPaths: ['inventory.barangs', 'cart.items', 'favorites.items'],
+        ignoredPaths: ['inventory.barangs', 'cart.items', 'favorites.items', 'opnameCart.items'],
         ignoredActions: [
           'inventory/setBarangs',
           'inventory/addMoreBarangs',
           'cart/loadCartFromStorage',
           'favorites/loadFavoritesFromStorage',
+          'opnameCart/loadOpnameCartFromStorage',
         ],
       },
       immutableCheck: {
         warnAfter: 128,
-        ignoredPaths: ['inventory.barangs', 'cart.items', 'favorites.items'],
+        ignoredPaths: ['inventory.barangs', 'cart.items', 'favorites.items', 'opnameCart.items'],
       },
     }),
 });

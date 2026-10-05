@@ -1,16 +1,24 @@
+import Config from '@/constants/Config';
 import axiosInstance from './axiosInstance';
-import { getAuthToken } from './storageService';
 
-/** Nilai `Barang.ket` untuk keterangan harga (bandingkan backend; bandingkan UI case-insensitive). */
 export const BARANG_KET_HARGA = ['NAIK', 'TURUN', 'SAMA', 'BARU'] as const;
 export type BarangKetHarga = (typeof BARANG_KET_HARGA)[number];
 
 export function normalizeBarangKetHarga(raw: string | null | undefined): BarangKetHarga | null {
   const u = (raw || '').trim().toUpperCase();
-  if (u === 'NAIK' || u === 'TURUN' || u === 'SAMA' || u === 'BARU') {
-    return u as BarangKetHarga;
-  }
+  if (u === 'NAIK' || u === 'TURUN' || u === 'SAMA' || u === 'BARU') return u as BarangKetHarga;
   return null;
+}
+
+export function getBarangImageUrl(gambar?: string | null): string | null {
+  if (!gambar || typeof gambar !== 'string' || !gambar.trim()) return null;
+  const trimmed = gambar.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  const baseUrl = (Config.API_URL || '').replace(/\/api\/?$/, '');
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/uploads/${trimmed}`;
+  return `${baseUrl}${cleanPath}`;
 }
 
 export interface Barang {
@@ -46,7 +54,6 @@ export interface Barang {
   qty_br: string | null;
   status_hadiah: string | null;
   sistem_hadiah: string | null;
-  /** Keterangan harga: NAIK | TURUN | SAMA | BARU (lihat `BarangKetHarga`). */
   ket: string;
   Barcode: string;
   gambar?: string;
@@ -57,6 +64,8 @@ export interface Gudang {
   nama: string;
   dept: string;
   counter: string;
+  status?: string;
+  barang_count?: number;
 }
 
 export interface ApiResponse<T> {
@@ -72,85 +81,72 @@ export interface PaginatedResponse<T> {
   data: T[];
   pagination?: {
     page: number;
-    per_page: number;
+    limit: number;
     total: number;
     total_pages: number;
   };
 }
 
-// Get barang dengan pagination dan search
+// Laravel: GET /barangs?page&limit&search&kd=
 export const getBarangsWithPagination = async (
   page: number = 1,
-  limit: number = 10,
+  limit: number = 20,
   search?: string,
   gudang?: string
 ): Promise<{ data: Barang[]; total: number; totalPages: number }> => {
   try {
-    let url = `/barangs?page=${page}&limit=${limit}`;
-    if (search && search.trim()) {
-      url += `&search=${encodeURIComponent(search)}`;
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (search?.trim()) {
+      params.set('search', search.trim());
     }
-    if (gudang && gudang.trim()) {
-      url += `&gudang=${encodeURIComponent(gudang)}`;
+    if (gudang?.trim()) {
+      params.set('kd', gudang.trim());
     }
 
-    const token = await getAuthToken();
-    const response = await axiosInstance.get(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (response.data && response.data.data) {
-      const total = response.data.pagination?.total || response.data.data.length;
-      const totalPages = response.data.pagination?.total_pages || Math.ceil(total / limit);
-
+    const response = await axiosInstance.get(`/barangs?${params.toString()}`);
+    if (response.data && Array.isArray(response.data.data)) {
+      const pagination = response.data.pagination || {};
+      const total = pagination.total == null ? 0 : Number(pagination.total);
+      const totalPages = Number(
+        pagination.total_pages ?? (total > 0 ? Math.max(1, Math.ceil(total / limit)) : page)
+      );
       return {
         data: response.data.data,
         total,
-        totalPages,
+        totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
       };
     }
 
-    return {
-      data: response.data,
-      total: response.data.length,
-      totalPages: 1,
-    };
-  } catch (error) {
+    return { data: [], total: 0, totalPages: 1 };
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return { data: [], total: 0, totalPages: 1 };
+    }
     console.error('Error fetching barangs with pagination:', error);
     throw error;
   }
 };
 
-// Get semua barang (legacy, tanpa pagination)
 export const getBarangs = async (): Promise<Barang[]> => {
-  try {
-    const token = await getAuthToken();
-    const response = await axiosInstance.get('/barangs', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (response.data && response.data.data) {
-      return response.data.data;
-    }
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching barangs:', error);
-    throw error;
-  }
+  const response = await axiosInstance.get('/barangs?limit=50');
+  return response.data?.data || response.data || [];
 };
 
-// Get gudang (warehouse) list
 export const getGudangs = async (): Promise<Gudang[]> => {
   try {
-    const token = await getAuthToken();
-    const response = await axiosInstance.get('/jenis-produk', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await axiosInstance.get('/gudangs');
+    const rows = response.data?.data || response.data || [];
+    if (Array.isArray(rows) && rows.length > 0) {
+      return rows;
+    }
+  } catch (error: any) {
+    console.warn('GET /gudangs gagal, fallback /jenis-produk', error?.response?.status);
+  }
+
+  try {
+    const response = await axiosInstance.get('/jenis-produk');
     if (response.data && response.data.data) {
       return response.data.data;
     }

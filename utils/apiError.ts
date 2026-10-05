@@ -43,7 +43,13 @@ export function getFriendlyErrorMessage(
   if (status === 401) return 'Sesi Anda telah berakhir. Silakan login ulang.';
   if (status === 403) return 'Anda tidak memiliki akses untuk melakukan aksi ini.';
   if (status === 404) return 'Data tidak ditemukan di server.';
-  if (status === 422) return 'Data yang dikirim tidak valid. Periksa kembali isian Anda.';
+  if (status === 422) {
+    const data = err.response.data as { message?: string } | undefined;
+    if (data?.message && !/^validation error$/i.test(data.message)) {
+      return data.message;
+    }
+    return 'Data yang dikirim tidak valid. Periksa kembali isian Anda.';
+  }
   if (status === 429) return 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.';
   if (status >= 500) return 'Terjadi gangguan pada server. Silakan coba beberapa saat lagi.';
 

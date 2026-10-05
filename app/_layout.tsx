@@ -8,12 +8,10 @@ import 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 
+import { useServerPersistence } from '@/hooks/useServerPersistence';
 import { ThemeContext, useThemeState } from '@/hooks/use-theme';
 import { checkAuthAsync } from '@/store/authSlice';
-import { loadCartFromStorage } from '@/store/cartSlice';
-import { loadFavoritesFromStorage } from '@/store/favoriteSlice';
 import { AppDispatch, RootState, store } from '@/store/store';
-import { getCart, getFavorites, saveCart, saveFavorites } from '@/services/storageService';
 
 export const unstable_settings = {
   initialRouteName: 'login',
@@ -23,46 +21,9 @@ function RootLayoutContent() {
   const { colorScheme, toggleTheme } = useThemeState();
   const bgColor = colorScheme === 'dark' ? '#1a1a1a' : '#ffffff';
   const dispatch = useDispatch<AppDispatch>();
-  const { isInitialized, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const cartItems = useSelector((state: RootState) => state.cart.items);
-  const favoriteItems = useSelector((state: RootState) => state.favorites.items);
+  const { isInitialized } = useSelector((state: RootState) => state.auth);
 
-  // Load data dari storage saat startup
-  useEffect(() => {
-    const restoreData = async () => {
-      try {
-        const [savedCart, savedFavorites] = await Promise.all([
-          getCart(),
-          getFavorites()
-        ]);
-        
-        if (savedCart && savedCart.length > 0) {
-          dispatch(loadCartFromStorage(savedCart));
-        }
-        
-        if (savedFavorites && savedFavorites.length > 0) {
-          dispatch(loadFavoritesFromStorage(savedFavorites));
-        }
-      } catch (error) {
-        console.error('Failed to restore persistence data:', error);
-      }
-    };
-    restoreData();
-  }, [dispatch]);
-
-  // Sync state keranjang ke storage saat ada perubahan
-  useEffect(() => {
-    if (cartItems.length >= 0) {
-      saveCart(cartItems);
-    }
-  }, [cartItems]);
-
-  // Sync state favorit ke storage saat ada perubahan
-  useEffect(() => {
-    if (favoriteItems.length >= 0) {
-      saveFavorites(favoriteItems);
-    }
-  }, [favoriteItems]);
+  useServerPersistence();
 
   // Check token saat app start
   useEffect(() => {
@@ -129,6 +90,7 @@ function RootLayoutContent() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="login" />
             <Stack.Screen name="register" />
+            <Stack.Screen name="users" />
             <Stack.Screen name="(tabs)" />
           </Stack>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
