@@ -111,13 +111,13 @@ function RootLayoutContent() {
   // Loading state saat check token (Custom Splash Screen)
   if (!isInitialized) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fff6ea', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
         <Image
-          source={require('@/assets/images/order_logo_new.png')}
+          source={require('@/assets/images/po_nari_pda_logo.png')}
           style={{ width: 180, height: 180, marginBottom: 20 }}
           resizeMode="contain"
         />
-        <ActivityIndicator size="small" color="#ffffff" />
+        <ActivityIndicator size="small" color="#B8860B" />
       </View>
     );
   }

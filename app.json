@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Order App",
+    "name": "PO NARI PDA",
     "slug": "order-app",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "orientation": "portrait",
-    "icon": "./assets/images/order_logo_new.png",
+    "icon": "./assets/images/po_nari_pda_icon.png",
     "scheme": "order",
     "userInterfaceStyle": "automatic",
     "updates": {
@@ -19,24 +19,22 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hilmifau.orderapp",
-      "buildNumber": "1"
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFD700",
-        "foregroundImage": "./assets/images/order_logo_new.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/po_nari_pda_adaptive_fg.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.hilmifau.orderapp",
-      "versionCode": 1
+      "versionCode": 2
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/order_logo_new.png",
-      "title": "Order App"
+      "favicon": "./assets/images/po_nari_pda_icon.png",
+      "title": "PO NARI PDA"
     },
     "plugins": [
       "expo-router",
@@ -52,10 +50,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/order_logo_new.png",
-          "imageWidth": 200,
+          "image": "./assets/images/po_nari_pda_splash.png",
+          "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#FFD700"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-secure-store"

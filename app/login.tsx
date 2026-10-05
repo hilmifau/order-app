@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -80,7 +81,12 @@ export default function LoginScreen() {
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: textColor }]}>Order App</Text>
+            <Image
+              source={require('@/assets/images/po_nari_pda_logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={[styles.title, { color: textColor }]}>PO NARI PDA</Text>
             <Text style={[styles.subtitle, { color: secondaryText }]}>Selamat Datang</Text>
           </View>
 
@@ -220,10 +226,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
