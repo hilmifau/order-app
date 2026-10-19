@@ -195,7 +195,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: secondaryTextColor }]}>PO NARI PDA v1.2.0</Text>
+          <Text style={[styles.footerText, { color: secondaryTextColor }]}>PO NARI PDA v1.3.0</Text>
           <Text style={[styles.footerText, { color: secondaryTextColor }]}>© 2026 Hilmi Fauzi</Text>
         </View>
       </ScrollView>
