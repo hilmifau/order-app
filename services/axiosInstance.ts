@@ -1,8 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
 import { getAuthToken } from './storageService';
 
-// Laravel (folder public) — Sanctum Bearer token
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://103.125.42.217:8080/public/api';
+// Laravel Backend — Sanctum Bearer token
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

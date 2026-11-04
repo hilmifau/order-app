@@ -9,7 +9,7 @@ export const Config = {
   USE_MOCK_DATA: process.env.EXPO_PUBLIC_USE_MOCK_DATA === 'true',
 
   // API Base URL
-  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://103.125.42.217:8080/public/api',
+  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api',
 };
 
 export default Config;
