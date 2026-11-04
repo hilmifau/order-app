@@ -34,6 +34,12 @@ yarn-error.*
 .env
 .env*.local
 
+# AI & Agent rules
+.agents/
+.cursor/
+AGENTS.md
+GEMINI.md
+
 # typescript
 *.tsbuildinfo
 
