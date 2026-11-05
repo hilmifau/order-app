@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 const USER_DATA_KEY = 'user_data';
@@ -36,7 +37,11 @@ export const getDeviceId = async (): Promise<string> => {
 export const saveAuthToken = async (token: string): Promise<void> => {
   try {
     memoryToken = token;
-    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token, SECURE_STORE_OPTIONS);
+    if (Platform.OS === 'web') {
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token, SECURE_STORE_OPTIONS);
+    }
   } catch (error) {
     console.error('Error saving auth token:', error);
     throw error;
@@ -44,14 +49,18 @@ export const saveAuthToken = async (token: string): Promise<void> => {
 };
 
 /**
- * Ambil authentication token dari SecureStore
+ * Ambil authentication token dari SecureStore (atau AsyncStorage di Web)
  */
 export const getAuthToken = async (): Promise<string | null> => {
   try {
     if (memoryToken !== undefined) {
       return memoryToken;
     }
-    memoryToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    if (Platform.OS === 'web') {
+      memoryToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    } else {
+      memoryToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    }
     return memoryToken;
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -60,12 +69,16 @@ export const getAuthToken = async (): Promise<string | null> => {
 };
 
 /**
- * Hapus authentication token dari SecureStore
+ * Hapus authentication token dari SecureStore (atau AsyncStorage di Web)
  */
 export const removeAuthToken = async (): Promise<void> => {
   try {
     memoryToken = null;
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    if (Platform.OS === 'web') {
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    }
   } catch (error) {
     console.error('Error removing auth token:', error);
     throw error;
@@ -210,7 +223,11 @@ export const clearAllStorage = async (): Promise<void> => {
     await AsyncStorage.removeItem(CART_KEY);
     await AsyncStorage.removeItem(FAVORITES_KEY);
     await AsyncStorage.removeItem(OPNAME_CART_KEY);
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    if (Platform.OS === 'web') {
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    }
   } catch (error) {
     console.error('Error clearing storage:', error);
     throw error;
